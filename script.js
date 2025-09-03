@@ -1818,6 +1818,39 @@ document.querySelectorAll('.modal-content').forEach(content => {
     content.addEventListener('click', function(e) {
         e.stopPropagation();
     });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // Définir l'URL de ton backend Render
+const API_BASE = "https://dz-loc.onrender.com";
+
+// Ensuite tu utilises API_BASE dans tes fonctions fetch()
+async function register(fullName, email, password, phone) {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fullName, email, password, phone })
+  });
+  return await res.json();
+}
+
 });
 
 // Initialize the app
