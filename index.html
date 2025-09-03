@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DZLoc - Location d'Appartements</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/home/zero/Musique/dzloc-backend/frontend/styles.css">
+</head>
+<body>
+    <header class="header">
+        <div class="nav-container">
+            <a href="#" class="logo" onclick="showScreen('welcome')">🏠 DZLoc</a>
+            <nav class="nav-menu" id="navMenu">
+                <a href="#" onclick="showScreen('welcome')">Accueil</a>
+                <a href="#" onclick="showScreen('search')">Rechercher</a>
+                <a href="#" onclick="showScreen('about')">À propos</a>
+                <a href="#" onclick="showScreen('contact')">Contact</a>
+                <div id="authNavItems">
+                    <a href="#" onclick="showScreen('login')">Connexion</a>
+                    <a href="#" onclick="showScreen('register')">Inscription</a>
+                </div>
+            </nav>
+            <div class="nav-controls">
+                <button class="theme-toggle" onclick="toggleTheme()">
+                    <span id="themeIcon">🌙</span>
+                </button>
+                <button class="hamburger" onclick="toggleMenu()" id="hamburger">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+        </div>
+    </header>
+    <main class="main-content">
+        <!-- Welcome Screen -->
+        <div id="welcome" class="screen active">
+            <div class="container">
+                <div class="hero">
+                    <h1>Trouvez votre logement idéal</h1>
+                    <p>La plateforme de référence pour la location d'appartements</p>
+                    <div class="cta-buttons">
+                        <button class="btn btn-primary" onclick="showScreen('register')">Commencer</button>
+                        <button class="btn btn-secondary" onclick="showScreen('search')">Découvrir</button>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">1,250+</div>
+                        <div class="stat-label">Appartements disponibles</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">5,000+</div>
+                        <div class="stat-label">Utilisateurs satisfaits</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">150+</div>
+                        <div class="stat-label">Villes couvertes</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Registration Screen -->
+        <div id="register" class="screen">
+            <div class="container">
+                <div class="auth-container">
+                    <h2 class="text-center mb-3">Créer un compte</h2>
+                    <div class="user-type-selector">
+                        <div class="user-type-option active" data-type="tenant">
+                            <h3>Locataire</h3>
+                            <p>Je cherche un logement</p>
+                        </div>
+                        <div class="user-type-option" data-type="owner">
+                            <h3>Propriétaire</h3>
+                            <p>Je loue mon bien</p>
+                        </div>
+                    </div>
+                    <form id="registerForm">
+                        <div class="form-group">
+                            <label for="fullName">Nom complet</label>
+                            <input type="text" id="fullName" required>
+                            <span class="error" id="fullNameError"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" required>
+                            <span class="error" id="emailError"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="phone">Téléphone</label>
+                            <input type="tel" id="phone" required>
+                            <span class="error" id="phoneError"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Mot de passe</label>
+                            <input type="password" id="password" required>
+                            <span class="error" id="passwordError"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="confirmPassword">Confirmer le mot de passe</label>
+                            <input type="password" id="confirmPassword" required>
+                            <span class="error" id="confirmPasswordError"></span>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">S'inscrire</button>
+                    </form>
+                    <p class="text-center mt-2">
+                        Déjà inscrit? <a href="#" onclick="showScreen('login')" style="color: var(--primary-color);">Se connecter</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+        <!-- Login Screen -->
+        <div id="login" class="screen">
+            <div class="container">
+                <div class="auth-container">
+                    <h2 class="text-center mb-3">Connexion</h2>
+                    <form id="loginForm">
+                        <div class="form-group">
+                            <label for="loginEmail">Email</label>
+                            <input type="email" id="loginEmail" required>
+                            <span class="error" id="loginEmailError"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="loginPassword">Mot de passe</label>
+                            <input type="password" id="loginPassword" required>
+                            <span class="error" id="loginPasswordError"></span>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Se connecter</button>
+                    </form>
+                    <p class="text-center mt-2">
+                        Pas encore inscrit? <a href="#" onclick="showScreen('register')" style="color: var(--primary-color);">Créer un compte</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+        <!-- Tenant Dashboard -->
+        <div id="tenantDashboard" class="screen">
+            <div class="container">
+                <div class="welcome-banner">
+                    <h1>Tableau de bord - Locataire</h1>
+                    <p>Bienvenue <span id="tenantName"></span>! Trouvez votre prochain logement.</p>
+                    <div class="cta-buttons">
+                        <button class="btn btn-secondary" onclick="logout()">Déconnexion</button>
+                        <button class="btn btn-primary" onclick="showScreen('profile')">Mon Profil</button>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="tenantFavoritesCount">0</div>
+                        <div class="stat-label">Favoris sauvegardés</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="tenantVisitsCount">0</div>
+                        <div class="stat-label">Visites programmées</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="tenantMessagesCount">0</div>
+                        <div class="stat-label">Messages</div>
+                    </div>
+                </div>
+                <h3 class="mb-2">Appartements recommandés</h3>
+                <div class="properties-grid" id="tenantProperties">
+                    <!-- Properties will be loaded dynamically -->
+                </div>
+            </div>
+        </div>
+        <!-- Owner Dashboard -->
+        <div id="ownerDashboard" class="screen">
+            <div class="container">
+                <div class="welcome-banner">
+                    <h1>Tableau de bord - Propriétaire</h1>
+                    <p>Bienvenue <span id="ownerName"></span>! Gérez vos propriétés.</p>
+                    <div class="cta-buttons">
+                        <button class="btn btn-secondary" onclick="logout()">Déconnexion</button>
+                        <button class="btn btn-primary" onclick="showScreen('profile')">Mon Profil</button>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="ownerPropertiesCount">0</div>
+                        <div class="stat-label">Propriétés actives</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="ownerViewsCount">0</div>
+                        <div class="stat-label">Vues totales</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="ownerMessagesCount">0</div>
+                        <div class="stat-label">Messages reçus</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="ownerVisitsCount">0</div>
+                        <div class="stat-label">Demandes de visite</div>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3>Mes propriétés</h3>
+                    <button class="btn btn-primary" onclick="showAddPropertyForm()">+ Ajouter propriété</button>
+                </div>
+                <div class="properties-grid" id="ownerProperties">
+                    <!-- Properties will be loaded dynamically -->
+                </div>
+            </div>
+        </div>
+        <!-- Profile Screen (Own Profile) -->
+        <div id="profile" class="screen">
+            <div class="container">
+                <div class="profile-container">
+                    <div class="profile-header">
+                        <img id="profileAvatar" class="profile-avatar" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><rect width='120' height='120' fill='%233b82f6'/><text x='60' y='70' font-family='Arial' font-size='40' fill='white' text-anchor='middle'>${currentUser ? currentUser.name.charAt(0).toUpperCase() : 'U'}</text></svg>" alt="Avatar">
+                        <div class="profile-info">
+                            <h2 id="profileName"></h2>
+                            <p id="profileType"></p>
+                            <p id="profileEmail"></p>
+                            <p id="profilePhone"></p>
+                        </div>
+                    </div>
+                    <div class="profile-tabs" id="profileTabs">
+                        <div class="profile-tab active" data-tab="edit">Modifier le profil</div>
+                        <div class="profile-tab" data-tab="security">Sécurité</div>
+                        <div class="profile-tab" data-tab="preferences">Préférences</div>
+                    </div>
+                    <div class="profile-content active" id="editTab">
+                        <h3 class="mb-2">Modifier les informations personnelles</h3>
+                        <form id="profileForm">
+                            <div class="avatar-upload">
+                                <img id="avatarPreview" class="avatar-preview" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='%233b82f6'/><text x='50' y='60' font-family='Arial' font-size='30' fill='white' text-anchor='middle'>${currentUser ? currentUser.name.charAt(0).toUpperCase() : 'U'}</text></svg>" alt="Avatar preview">
+                                <div>
+                                    <input type="file" id="avatarInput" accept="image/*" style="display: none;" onchange="handleAvatarUpload(this.files)">
+                                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('avatarInput').click()">Changer la photo</button>
+                                    <p class="mt-2" style="font-size: 0.9rem; color: var(--text-secondary);">Format JPG, PNG ou GIF. Max 1MB.</p>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="profileFullName">Nom complet</label>
+                                    <input type="text" id="profileFullName" required>
+                                    <span class="error" id="profileFullNameError"></span>
+                                </div>
+                                <div class="form-group">
+                                    <label for="profilePhoneNumber">Téléphone</label>
+                                    <input type="tel" id="profilePhoneNumber" required>
+                                    <span class="error" id="profilePhoneNumberError"></span>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="profileEmailAddress">Email</label>
+                                <input type="email" id="profileEmailAddress" required>
+                                <span class="error" id="profileEmailAddressError"></span>
+                            </div>
+                            <div class="form-group">
+                                <label for="profileBio">Bio (optionnel)</label>
+                                <textarea id="profileBio" rows="3" placeholder="Décrivez-vous en quelques mots..."></textarea>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" onclick="showDashboard()">Annuler</button>
+                                <button type="submit" class="btn btn-primary">Enregistrer les modifications</button>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="profile-content" id="securityTab">
+                        <h3 class="mb-2">Modifier le mot de passe</h3>
+                        <form id="securityForm">
+                            <div class="form-group">
+                                <label for="currentPassword">Mot de passe actuel</label>
+                                <input type="password" id="currentPassword" required>
+                                <span class="error" id="currentPasswordError"></span>
+                            </div>
+                            <div class="form-group">
+                                <label for="newPassword">Nouveau mot de passe</label>
+                                <input type="password" id="newPassword" required>
+                                <span class="error" id="newPasswordError"></span>
+                            </div>
+                            <div class="form-group">
+                                <label for="confirmNewPassword">Confirmer le nouveau mot de passe</label>
+                                <input type="password" id="confirmNewPassword" required>
+                                <span class="error" id="confirmNewPasswordError"></span>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Mettre à jour le mot de passe</button>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="profile-content" id="preferencesTab">
+                        <h3 class="mb-2">Préférences de notification</h3>
+                        <form id="preferencesForm">
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="emailNotifications" checked>
+                                    <span>Notifications par email</span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="smsNotifications">
+                                    <span>Notifications par SMS</span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="whatsappNotifications" checked>
+                                    <span>Notifications WhatsApp</span>
+                                </label>
+                            </div>
+                            <h3 class="mb-2 mt-3">Préférences de langue</h3>
+                            <div class="form-group">
+                                <label for="language">Langue</label>
+                                <select id="language">
+                                    <option value="fr">Français</option>
+                                    <option value="ar">العربية</option>
+                                    <option value="en">English</option>
+                                </select>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Enregistrer les préférences</button>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="profile-content" id="publicationsTab">
+                        <h3 class="mb-2">Mes publications</h3>
+                        <div class="properties-grid" id="profilePublications">
+                            <!-- User's properties will be loaded here -->
+                        </div>
+                    </div>
+                    <div class="profile-content" id="favoritesTab">
+                        <h3 class="mb-2">Mes favoris</h3>
+                        <div class="properties-grid" id="profileFavorites">
+                            <!-- User's favorites will be loaded here -->
+                        </div>
+                    </div>
+                    <div class="profile-content" id="visitsTab">
+                        <h3 class="mb-2">Mes visites</h3>
+                        <div id="profileVisits">
+                            <!-- User's visits will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Public User Profile Screen -->
+        <div id="userProfile" class="screen">
+            <div class="container">
+                <div class="profile-container">
+                    <div class="profile-header">
+                        <img id="userProfileAvatar" class="profile-avatar" src="" alt="Avatar">
+                        <div class="profile-info">
+                            <h2 id="userProfileName"></h2>
+                            <p id="userProfileType"></p>
+                            <p id="userProfileEmail"></p>
+                            <p id="userProfilePhone"></p>
+                            <p id="userProfileBio"></p>
+                        </div>
+                    </div>
+                    <h3 class="mb-2">Publications</h3>
+                    <div class="properties-grid" id="userProfilePublications">
+                        <!-- User's properties will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Add/Edit Property Screen -->
+        <div id="propertyFormScreen" class="screen">
+            <div class="container">
+                <div class="property-form-container">
+                    <h2 class="text-center mb-3" id="propertyFormTitle">Ajouter une propriété</h2>
+                    <form id="propertyForm">
+                        <input type="hidden" id="propertyId">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="propertyTitle">Titre de l'annonce</label>
+                                <input type="text" id="propertyTitle" required>
+                                <span class="error" id="propertyTitleError"></span>
+                            </div>
+                            <div class="form-group">
+                                <label for="propertyPrice">Prix (DZD/mois)</label>
+                                <input type="number" id="propertyPrice" min="0" required>
+                                <span class="error" id="propertyPriceError"></span>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="propertyType">Type de propriété</label>
+                                <select id="propertyType" required>
+                                    <option value="">Sélectionnez un type</option>
+                                    <option value="appartement">Appartement</option>
+                                    <option value="maison">Maison</option>
+                                    <option value="studio">Studio</option>
+                                    <option value="loft">Loft</option>
+                                </select>
+                                <span class="error" id="propertyTypeError"></span>
+                            </div>
+                            <div class="form-group">
+                                <label for="propertyStatus">Statut</label>
+                                <select id="propertyStatus" required>
+                                    <option value="available">Disponible</option>
+                                    <option value="rented">Loué</option>
+                                </select>
+                                <span class="error" id="propertyStatusError"></span>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="propertySurface">Surface (m²)</label>
+                                <input type="number" id="propertySurface" min="0" required>
+                                <span class="error" id="propertySurfaceError"></span>
+                            </div>
+                            <div class="form-group">
+                                <label for="propertyRooms">Nombre de pièces</label>
+                                <input type="number" id="propertyRooms" min="0" required>
+                                <span class="error" id="propertyRoomsError"></span>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="propertyBedrooms">Chambres</label>
+                                <input type="number" id="propertyBedrooms" min="0" required>
+                                <span class="error" id="propertyBedroomsError"></span>
+                            </div>
+                            <div class="form-group">
+                                <label for="propertyBathrooms">Salles de bain</label>
+                                <input type="number" id="propertyBathrooms" min="0" required>
+                                <span class="error" id="propertyBathroomsError"></span>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="propertyWhatsApp">Numéro WhatsApp</label>
+                                <input type="tel" id="propertyWhatsApp" placeholder="+213123456789" required>
+                                <span class="error" id="propertyWhatsAppError"></span>
+                            </div>
+                            <div class="form-group">
+                                <label for="propertyCity">Ville</label>
+                                <input type="text" id="propertyCity" required>
+                                <span class="error" id="propertyCityError"></span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="propertyAddress">Adresse</label>
+                            <input type="text" id="propertyAddress" required>
+                            <span class="error" id="propertyAddressError"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="propertyDescription">Description</label>
+                            <textarea id="propertyDescription" rows="5" required></textarea>
+                            <span class="error" id="propertyDescriptionError"></span>
+                        </div>
+                        <div class="form-group">
+                            <label>Commodités</label>
+                            <div class="amenities-group">
+                                <label><input type="checkbox" name="amenity" value="wifi"> Wi-Fi</label>
+                                <label><input type="checkbox" name="amenity" value="parking"> Parking</label>
+                                <label><input type="checkbox" name="amenity" value="piscine"> Piscine</label>
+                                <label><input type="checkbox" name="amenity" value="gym"> Salle de sport</label>
+                                <label><input type="checkbox" name="amenity" value="climatisation"> Climatisation</label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Photos</label>
+                            <div class="image-upload-container" onclick="document.getElementById('propertyImages').click()">
+                                <i class="fas fa-cloud-upload-alt" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                                <p>Cliquez pour ajouter des photos ou glissez-déposez les ici</p>
+                                <input type="file" id="propertyImages" multiple accept="image/*" style="display: none;" onchange="handleImageUpload(this.files)">
+                            </div>
+                            <div class="image-preview-container" id="imagePreviewContainer">
+                                <!-- Image previews will be added here -->
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" onclick="cancelPropertyEdit()">Annuler</button>
+                            <button type="submit" class="btn btn-primary">Enregistrer</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <!-- Search Screen -->
+        <div id="search" class="screen">
+            <div class="container">
+                <h2 class="text-center mb-3">Rechercher un logement</h2>
+                <div class="search-filters">
+                    <form id="searchForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="searchCity">Ville</label>
+                                <input type="text" id="searchCity" placeholder="Alger, Oran, Constantine...">
+                            </div>
+                            <div class="form-group">
+                                <label for="searchType">Type de logement</label>
+                                <select id="searchType">
+                                    <option value="">Tous types</option>
+                                    <option value="appartement">Appartement</option>
+                                    <option value="maison">Maison</option>
+                                    <option value="studio">Studio</option>
+                                    <option value="loft">Loft</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="searchMinPrice">Prix min (DZD)</label>
+                                <input type="number" id="searchMinPrice" placeholder="30000" min="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="searchMaxPrice">Prix max (DZD)</label>
+                                <input type="number" id="searchMaxPrice" placeholder="100000" min="0">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="searchMinSurface">Surface min (m²)</label>
+                                <input type="number" id="searchMinSurface" placeholder="20" min="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="searchBedrooms">Chambres</label>
+                                <select id="searchBedrooms">
+                                    <option value="">Toutes</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3+</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Commodités</label>
+                            <div class="amenities-group">
+                                <label><input type="checkbox" name="searchAmenity" value="wifi"> Wi-Fi</label>
+                                <label><input type="checkbox" name="searchAmenity" value="parking"> Parking</label>
+                                <label><input type="checkbox" name="searchAmenity" value="piscine"> Piscine</label>
+                                <label><input type="checkbox" name="searchAmenity" value="gym"> Salle de sport</label>
+                                <label><input type="checkbox" name="searchAmenity" value="climatisation"> Climatisation</label>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-primary" style="width: 100%;" onclick="performSearch()">
+                            <i class="fas fa-search"></i> Rechercher
+                        </button>
+                        <button type="button" class="btn btn-secondary mt-2" style="width: 100%;" onclick="saveSearchCriteria()">Sauvegarder cette recherche</button>
+                    </form>
+                </div>
+                <div class="search-results">
+                    <div class="search-sort">
+                        <label for="sortBy">Trier par :</label>
+                        <select id="sortBy" onchange="performSearch()">
+                            <option value="price-asc">Prix croissant</option>
+                            <option value="price-desc">Prix décroissant</option>
+                            <option value="date-desc">Date d'ajout récente</option>
+                            <option value="popularity-desc">Popularité (avis)</option>
+                        </select>
+                        <span id="resultsCount" style="margin-left: auto; color: var(--text-secondary);"></span>
+                    </div>
+                    <h3 class="mb-2">Résultats de recherche</h3>
+                    <div class="properties-grid" id="searchResults">
+                        <!-- Search results will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- About Screen -->
+        <div id="about" class="screen">
+            <div class="container">
+                <h2 class="text-center mb-3">À propos de DZLoc</h2>
+                <div class="about-content">
+                    <p class="mb-2">
+                        DZLoc est la plateforme de référence pour la location d'appartements.
+                        Nous connectons les locataires et les propriétaires dans un environnement
+                        sécurisé et moderne.
+                    </p>
+                    <h3 class="mb-1">Notre mission</h3>
+                    <p class="mb-2">
+                        Simplifier la recherche et la gestion de locations immobilières grâce à
+                        une plateforme intuitive, transparente et efficace.
+                    </p>
+                    <h3 class="mb-1">Nos services</h3>
+                    <ul style="margin-left: 2rem; margin-bottom: 1rem;">
+                        <li>Recherche avancée de logements</li>
+                        <li>Profils vérifiés</li>
+                        <li>Messagerie intégrée</li>
+                        <li>Gestion des visites</li>
+                        <li>Contrats dématérialisés</li>
+                    </ul>
+                    <h3 class="mb-1">Notre équipe</h3>
+                    <div class="team-grid">
+                        <div class="team-member">
+                            <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><rect width='120' height='120' fill='%233b82f6'/><text x='60' y='70' font-family='Arial' font-size='40' fill='white' text-anchor='middle'>R</text></svg>" alt="GHEBRIOUA Rayane">
+                            <h4>GHEBRIOUA Rayane</h4>
+                            <p>Responsable Technique</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Contact Screen -->
+        <div id="contact" class="screen">
+            <div class="container">
+                <h2 class="text-center mb-3">Nous contacter</h2>
+                <div class="contact-info">
+                    <div class="contact-card">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <h4>Adresse</h4>
+                        <p>25 Rue Didouche Mourad<br>Alger, Algérie</p>
+                    </div>
+                    <div class="contact-card">
+                        <i class="fas fa-phone"></i>
+                        <h4>Téléphone</h4>
+                        <p>+213 7 90 94 07 31</p>
+                    </div>
+                    <div class="contact-card">
+                        <i class="fas fa-envelope"></i>
+                        <h4>Email</h4>
+                        <p>rayaneghebrioua10@gmail.com</p>
+                    </div>
+                    <div class="contact-card">
+                        <i class="fab fa-whatsapp"></i>
+                        <h4>WhatsApp</h4>
+                        <p>+213 7 90 94 07 31</p>
+                    </div>
+                </div>
+                <div class="auth-container">
+                    <h3 class="text-center mb-3">Envoyez-nous un message</h3>
+                    <form id="contactForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="contactName">Nom complet</label>
+                                <input type="text" id="contactName" required>
+                                <span class="error" id="contactNameError"></span>
+                            </div>
+                            <div class="form-group">
+                                <label for="contactEmail">Email</label>
+                                <input type="email" id="contactEmail" required>
+                                <span class="error" id="contactEmailError"></span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="contactSubject">Sujet</label>
+                            <select id="contactSubject" required>
+                                <option value="">Sélectionnez un sujet</option>
+                                <option value="question">Question générale</option>
+                                <option value="technical">Support technique</option>
+                                <option value="partnership">Partenariat</option>
+                                <option value="other">Autre</option>
+                            </select>
+                            <span class="error" id="contactSubjectError"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="contactMessage">Message</label>
+                            <textarea id="contactMessage" rows="5" required></textarea>
+                            <span class="error" id="contactMessageError"></span>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Envoyer le message</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <!-- Messages Screen -->
+        <div id="messages" class="screen">
+            <div class="container">
+                <h2 class="text-center mb-3">Messages</h2>
+                <div class="profile-tabs" id="messagesTabs">
+                    <div class="profile-tab active" data-tab="conversations">Conversations</div>
+                    <div class="profile-tab" data-tab="visits">Demandes de visite</div>
+                </div>
+                <div class="profile-content active" id="conversationsTab">
+                    <div id="conversationsList">
+                        <!-- Conversations will be loaded dynamically -->
+                    </div>
+                </div>
+                <div class="profile-content" id="visitsTab">
+                    <div id="visitsList">
+                        <!-- Visit requests will be loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Property Details Modal -->
+        <div class="modal-overlay" id="propertyModal">
+            <div class="property-modal">
+                <div class="modal-close" onclick="closeModal()">
+                    <i class="fas fa-times"></i>
+                </div>
+                <div class="modal-header">
+                    <h2 id="modalPropertyTitle"></h2>
+                    <div class="property-price" id="modalPropertyPrice"></div>
+                    <div class="property-details" id="modalPropertyDetails"></div>
+                    <button class="btn btn-secondary" onclick="viewOwnerProfile(modalPropertyOwnerId)">Voir profil du propriétaire</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-gallery">
+                        <div class="modal-main-image">
+                            <img id="modalMainImage" src="" alt="Property image">
+                        </div>
+                        <div class="modal-thumbnails" id="modalThumbnails">
+                            <!-- Thumbnails will be added here -->
+                        </div>
+                    </div>
+                    <div class="modal-details">
+                        <div>
+                            <h4>Adresse</h4>
+                            <p id="modalPropertyAddress"></p>
+                        </div>
+                        <div>
+                            <h4>Ville</h4>
+                            <p id="modalPropertyCity"></p>
+                        </div>
+                        <div>
+                            <h4>Type</h4>
+                            <p id="modalPropertyType"></p>
+                        </div>
+                        <div>
+                            <h4>Statut</h4>
+                            <p id="modalPropertyStatus"></p>
+                        </div>
+                        <div>
+                            <h4>Contact WhatsApp</h4>
+                            <p id="modalPropertyWhatsApp"></p>
+                        </div>
+                    </div>
+                    <div class="modal-description" id="modalPropertyDescription"></div>
+                    <div class="cta-buttons">
+                        <button class="btn btn-primary" onclick="scheduleVisit()">Planifier une visite</button>
+                    </div>
+                    <div class="reviews-section">
+                        <h4>Avis</h4>
+                        <div id="modalReviewsList">
+                            <!-- Reviews will be loaded here -->
+                        </div>
+                        <form id="reviewForm" class="review-form">
+                            <div class="stars-input" id="reviewStars">
+                                <i class="fas fa-star" data-value="1"></i>
+                                <i class="fas fa-star" data-value="2"></i>
+                                <i class="fas fa-star" data-value="3"></i>
+                                <i class="fas fa-star" data-value="4"></i>
+                                <i class="fas fa-star" data-value="5"></i>
+                            </div>
+                            <div class="form-group">
+                                <label for="reviewComment">Commentaire</label>
+                                <textarea id="reviewComment" rows="3" required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Envoyer l'avis</button>
+                        </form>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" onclick="closeModal()">Fermer</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- WhatsApp Contact Modal -->
+        <div class="modal-overlay" id="whatsappModal">
+            <div class="whatsapp-modal">
+                <div class="modal-close" onclick="closeWhatsAppModal()">
+                    <i class="fas fa-times"></i>
+                </div>
+                <div class="whatsapp-icon">
+                    <i class="fab fa-whatsapp"></i>
+                </div>
+                <h2 class="mb-2">Contacter le propriétaire</h2>
+                <p class="mb-3">Vous allez être redirigé vers WhatsApp pour contacter le propriétaire de ce bien.</p>
+                <div class="mb-3">
+                    <p><strong>Propriété:</strong> <span id="whatsappPropertyTitle"></span></p>
+                    <p><strong>Prix:</strong> <span id="whatsappPropertyPrice"></span></p>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-secondary" onclick="closeWhatsAppModal()">Annuler</button>
+                    <button class="btn btn-whatsapp" onclick="openWhatsApp()">
+                        <i class="fab fa-whatsapp"></i> Ouvrir WhatsApp
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Chat Modal -->
+        <div class="modal-overlay" id="chatModal">
+            <div class="chat-modal">
+                <div class="modal-close" onclick="closeChatModal()">
+                    <i class="fas fa-times"></i>
+                </div>
+                <div class="chat-header">
+                    <h3 id="chatWithUser">Conversation</h3>
+                    <span id="chatPropertyTitle"></span>
+                </div>
+                <div class="chat-messages" id="chatMessages">
+                    <!-- Messages will be loaded here -->
+                </div>
+                <div class="chat-input">
+                    <input type="text" id="chatInput" placeholder="Tapez votre message...">
+                    <button class="btn btn-primary" onclick="sendChatMessage()">Envoyer</button>
+                </div>
+            </div>
+        </div>
+        <!-- Visit Scheduling Modal -->
+        <div class="modal-overlay" id="visitModal">
+            <div class="whatsapp-modal">
+                <div class="modal-close" onclick="closeVisitModal()">
+                    <i class="fas fa-times"></i>
+                </div>
+                <h2 class="mb-2">Planifier une visite</h2>
+                <form id="visitForm">
+                    <div class="form-group">
+                        <label for="visitDate">Date de la visite</label>
+                        <input type="date" id="visitDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="visitTime">Heure de la visite</label>
+                        <input type="time" id="visitTime" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="visitMessage">Message (optionnel)</label>
+                        <textarea id="visitMessage" rows="3" placeholder="Précisez vos disponibilités ou demandes particulières..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Demander la visite</button>
+                </form>
+            </div>
+        </div>
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="loading-spinner"></div>
+        </div>
+    </main>
+    <footer class="footer">
+        <p>&copy; 2025 DZLoc. Tous droits réservés.</p>
+    </footer>
+    <script src="/home/zero/Musique/dzloc-backend/frontend/script.js"></script>
+</body>
+</html>
