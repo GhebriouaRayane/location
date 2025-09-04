@@ -64,17 +64,29 @@ async function api(path, options = {}) {
         headers.Authorization = `Bearer ${authToken}`;
     }
     
-    const response = await fetch(`${API_BASE}${path}`, {
-        ...options,
-        headers
-    });
-    
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Erreur API: ${response.status}`);
+    try {
+        const response = await fetch(`${API_BASE}${path}`, {
+            ...options,
+            headers
+        });
+        
+        if (!response.ok) {
+            // Gérer spécifiquement les erreurs 409 (Conflict)
+            if (response.status === 409) {
+                throw new Error("L'email ou le téléphone est déjà utilisé");
+            }
+            // Gérer les erreurs 404 (Not Found)
+            if (response.status === 404) {
+                throw new Error("Ressource non trouvée");
+            }
+            throw new Error(`Erreur API: ${response.status}`);
+        }
+        
+        return response.json();
+    } catch (error) {
+        console.error("Erreur API:", error);
+        throw error;
     }
-    
-    return response.json();
 }
 
 // Fonctions d'authentification
@@ -439,9 +451,23 @@ async function respondVisit(visitId, status, ownerResponse) {
 // Fonction pour récupérer les données utilisateur
 async function fetchUserData(userId) {
     try {
+        // Vérifier d'abord si l'utilisateur est en cache
+        if (currentUser && currentUser.id === userId) {
+            return { success: true, data: currentUser };
+        }
+        
         const data = await api(`/users/${userId}`);
         return { success: true, data };
     } catch (error) {
+        console.error("Erreur fetchUserData:", error);
+        // Retourner les données locales si disponibles
+        const savedUser = localStorage.getItem('currentUser');
+        if (savedUser) {
+            const user = JSON.parse(savedUser);
+            if (user.id === userId) {
+                return { success: true, data: user };
+            }
+        }
         return { success: false, error: error.message };
     }
 }
@@ -496,29 +522,49 @@ async function updateUserPreferences(preferences) {
 
 // Initialisation de l'application
 async function initApp() {
-    // Charger le thème
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
-        isDarkMode = true;
-        document.body.setAttribute('data-theme', 'dark');
-        document.getElementById('themeIcon').textContent = '☀️';
-    }
-
-    // Vérifier si l'utilisateur est connecté
-    const savedUser = localStorage.getItem('currentUser');
-    authToken = localStorage.getItem("authToken");
+    showLoading();
     
-    if (savedUser && authToken) {
-        try {
+    try {
+        // Charger le thème
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            isDarkMode = true;
+            document.body.setAttribute('data-theme', 'dark');
+            document.getElementById('themeIcon').textContent = '☀️';
+        }
+
+        // Vérifier si l'utilisateur est connecté
+        const savedUser = localStorage.getItem('currentUser');
+        authToken = localStorage.getItem("authToken");
+        
+        if (savedUser && authToken) {
             currentUser = JSON.parse(savedUser);
             
-            // Vérifier la validité du token
-            const userData = await fetchUserData(currentUser.id);
-            if (userData.success) {
-                currentUser = userData.data;
-                localStorage.setItem('currentUser', JSON.stringify(currentUser));
-                updateNavForLoggedUser();
-                showDashboard();
+            try {
+                // Vérifier la validité du token
+                const userData = await fetchUserData(currentUser.id);
+                if (userData.success) {
+                    currentUser = userData.data;
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    updateNavForLoggedUser();
+                    showDashboard();
+                } else {
+                    logout();
+                }
+            } catch (error) {
+                console.error("Erreur d'authentification:", error);
+                logout();
+            }
+        } else {
+            showScreen('welcome');
+        }
+    } catch (error) {
+        console.error("Erreur d'initialisation:", error);
+        showScreen('welcome');
+    } finally {
+        hideLoading();
+    }
+}
                 
                 // Charger les données initiales
                 await Promise.all([
@@ -1875,3 +1921,38 @@ async function register(fullName, email, password, phone) {
 
 // Initialize the app
 initApp();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function checkAuth() {
+    if (!currentUser || !authToken) {
+        showScreen('login');
+        return false;
+    }
+    return true;
+}
+
+// Modifiez vos fonctions pour inclure cette vérification
+function showAddPropertyForm() {
+    if (!checkAuth()) return;
+    
+    // Reset form
+    document.getElementById('propertyForm').reset();
+    document.getElementById('propertyId').value = '';
+    currentPropertyImages = [];
+    updateImagePreviews();
+    
+    // Show the form screen
+    showScreen('propertyForm');
+}
