@@ -1753,12 +1753,15 @@ async function loadSearchResults() {
 
 // Utility Functions
 function showLoading() {
-    document.getElementById('loading').classList.add('active');
+  const loader = document.getElementById("loading");
+  if (loader) loader.classList.remove("hidden");
 }
 
 function hideLoading() {
-    document.getElementById('loading').classList.remove('active');
+  const loader = document.getElementById("loading");
+  if (loader) loader.classList.add("hidden");
 }
+
 
 function validateForm(form) {
     let isValid = true;
