@@ -1,19 +1,6 @@
-// Function to show add property form
-function showAddPropertyForm() {
-    // Reset form
-    document.getElementById('propertyForm').reset();
-    document.getElementById('propertyId').value = '';
-    currentPropertyImages = [];
-    updateImagePreviews();
-    
-    // Show the form screen
-    showScreen('propertyForm');
-}
-
-
-
-
-
+// Configuration API
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "https://dz-loc.onrender.com";
+let authToken = localStorage.getItem("authToken") || null;
 
 // Theme Management
 let isDarkMode = false;
@@ -21,7 +8,6 @@ function toggleTheme() {
     isDarkMode = !isDarkMode;
     document.body.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
     document.getElementById('themeIcon').textContent = isDarkMode ? '☀️' : '🌙';
-    // Save theme preference
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
 }
 
@@ -42,46 +28,44 @@ let conversations = [];
 let visits = [];
 let currentPropertyImages = [];
 let currentWhatsAppProperty = null;
-let currentChat = {propertyId: null, otherUserId: null};
+let currentChat = { propertyId: null, otherUserId: null, conversationId: null };
 let currentAvatar = null;
 let currentViewUserId = null;
 let modalPropertyOwnerId = null;
 let currentReviewStars = 0;
 let modalPropertyId = null;
 
-// Configuration API
-const API_BASE = "https://dz-loc.onrender.com";
-let authToken = localStorage.getItem("authToken") || null;
-
-// Fonction utilitaire pour les appels API
+// Utility API function
 async function api(path, options = {}) {
     const headers = {
         "Content-Type": "application/json",
         ...(options.headers || {})
     };
-    
+   
     if (authToken) {
         headers.Authorization = `Bearer ${authToken}`;
     }
-    
+   
     try {
         const response = await fetch(`${API_BASE}${path}`, {
             ...options,
             headers
         });
-        
+   
         if (!response.ok) {
-            // Gérer spécifiquement les erreurs 409 (Conflict)
+            if (response.status === 401) {
+                logout();
+                throw new Error("Session expirée. Veuillez vous reconnecter.");
+            }
             if (response.status === 409) {
                 throw new Error("L'email ou le téléphone est déjà utilisé");
             }
-            // Gérer les erreurs 404 (Not Found)
             if (response.status === 404) {
                 throw new Error("Ressource non trouvée");
             }
             throw new Error(`Erreur API: ${response.status}`);
         }
-        
+   
         return response.json();
     } catch (error) {
         console.error("Erreur API:", error);
@@ -89,7 +73,7 @@ async function api(path, options = {}) {
     }
 }
 
-// Fonctions d'authentification
+// Authentication Functions
 async function registerUser(form) {
     const body = {
         full_name: form.fullName.value.trim(),
@@ -98,19 +82,23 @@ async function registerUser(form) {
         password: form.password.value,
         user_type: userType
     };
-    
+   
     try {
         const data = await api("/auth/register", {
             method: "POST",
             body: JSON.stringify(body)
         });
-        
+   
+        if (!data.token || !data.user) {
+            throw new Error("Réponse API invalide");
+        }
+   
         authToken = data.token;
         localStorage.setItem("authToken", authToken);
         currentUser = data.user;
         localStorage.setItem("currentUser", JSON.stringify(currentUser));
-        
-        return { success: true };
+   
+        return { success: true, data };
     } catch (error) {
         return { success: false, error: error.message };
     }
@@ -121,25 +109,29 @@ async function loginUser(form) {
         email: form.loginEmail.value.trim(),
         password: form.loginPassword.value
     };
-    
+   
     try {
         const data = await api("/auth/login", {
             method: "POST",
             body: JSON.stringify(body)
         });
-        
+   
+        if (!data.token || !data.user) {
+            throw new Error("Réponse API invalide");
+        }
+   
         authToken = data.token;
         localStorage.setItem("authToken", authToken);
         currentUser = data.user;
         localStorage.setItem("currentUser", JSON.stringify(currentUser));
-        
-        return { success: true };
+   
+        return { success: true, data };
     } catch (error) {
         return { success: false, error: error.message };
     }
 }
 
-// Fonctions pour les propriétés
+// Property Functions
 async function fetchProperties(filters = {}) {
     try {
         const qs = new URLSearchParams(filters).toString();
@@ -157,20 +149,18 @@ async function viewProperty(id) {
             api(`/properties/${id}`),
             api(`/properties/${id}/view`, { method: "POST" })
         ]);
-        
+   
         const property = detailRes;
-        
-        // Mettre à jour les données locales
+   
         const index = properties.findIndex(p => p.id === id);
         if (index !== -1) {
             properties[index] = property;
         } else {
             properties.push(property);
         }
-        
+   
         modalPropertyOwnerId = property.ownerId;
         modalPropertyId = property.id;
-
         document.getElementById('modalPropertyTitle').textContent = property.title;
         document.getElementById('modalPropertyPrice').textContent = `${property.price.toLocaleString('fr-DZ')} DZD/mois`;
         document.getElementById('modalPropertyAddress').textContent = property.address;
@@ -179,7 +169,6 @@ async function viewProperty(id) {
         document.getElementById('modalPropertyStatus').textContent = property.status === 'available' ? 'Disponible' : 'Loué';
         document.getElementById('modalPropertyWhatsApp').textContent = property.whatsapp;
         document.getElementById('modalPropertyDescription').textContent = property.description;
-
         const detailsHtml = `
             <span>📐 ${property.surface}m²</span>
             <span>🏠 ${property.rooms} pièces</span>
@@ -187,13 +176,11 @@ async function viewProperty(id) {
             <span>🚿 ${property.bathrooms} sdb</span>
         `;
         document.getElementById('modalPropertyDetails').innerHTML = detailsHtml;
-
         const thumbnailsContainer = document.getElementById('modalThumbnails');
         thumbnailsContainer.innerHTML = '';
-
         if (property.images && property.images.length > 0) {
             document.getElementById('modalMainImage').src = property.images[0];
-            property.images.forEach((image, index) =>{
+            property.images.forEach((image, index) => {
                 const thumb = document.createElement('div');
                 thumb.className = 'modal-thumbnail' + (index === 0 ? ' active' : '');
                 thumb.innerHTML = `<img src="${image}" alt="Thumbnail ${index + 1}">`;
@@ -207,11 +194,8 @@ async function viewProperty(id) {
         } else {
             document.getElementById('modalMainImage').src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23' + (isDarkMode ? '374151' : 'f3f4f6') + '"/><text x="200" y="150" font-family="Arial" font-size="20" fill="%23' + (isDarkMode ? '9ca3af' : '6b7280') + '" text-anchor="middle">Image non disponible</text></svg>';
         }
-
-        // Load reviews
         loadModalReviews(property.id);
         document.getElementById('propertyModal').classList.add('active');
-        
     } catch (error) {
         console.error("Erreur lors du chargement de la propriété:", error);
         alert("Erreur lors du chargement de la propriété: " + error.message);
@@ -226,8 +210,6 @@ async function submitReview(propertyId, stars, comment) {
             method: "POST",
             body: JSON.stringify({ stars, comment })
         });
-        
-        // Recharger les avis
         loadModalReviews(propertyId);
         return { success: true };
     } catch (error) {
@@ -236,20 +218,27 @@ async function submitReview(propertyId, stars, comment) {
 }
 
 async function uploadImage(file) {
+    if (file.size > 5 * 1024 * 1024) {
+        throw new Error("L'image ne doit pas dépasser 5 Mo");
+    }
+    if (!['image/jpeg', 'image/png', 'image/gif'].includes(file.type)) {
+        throw new Error("Seuls les formats JPEG, PNG et GIF sont autorisés");
+    }
+
     const formData = new FormData();
     formData.append("image", file);
-    
+   
     try {
         const response = await fetch(`${API_BASE}/uploads/image`, {
             method: "POST",
             headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
             body: formData
         });
-        
+   
         if (!response.ok) {
             throw new Error("Échec de l'upload");
         }
-        
+   
         const data = await response.json();
         return data.url;
     } catch (error) {
@@ -260,24 +249,19 @@ async function uploadImage(file) {
 
 async function saveProperty(form) {
     try {
-        // Upload des images
         const imageUrls = [];
         for (const image of currentPropertyImages) {
             if (image.startsWith('data:image')) {
-                // Convertir Data URL en blob pour l'upload
                 const response = await fetch(image);
                 const blob = await response.blob();
                 const file = new File([blob], `image-${Date.now()}.jpg`, { type: 'image/jpeg' });
                 const url = await uploadImage(file);
                 imageUrls.push(url);
             } else {
-                // Image déjà uploadée
                 imageUrls.push(image);
             }
         }
-
         const amenities = Array.from(document.querySelectorAll('input[name="amenity"]:checked')).map(cb => cb.value);
-
         const body = {
             title: form.propertyTitle.value,
             price: parseInt(form.propertyPrice.value),
@@ -294,24 +278,21 @@ async function saveProperty(form) {
             amenities,
             images: imageUrls
         };
-
         const id = form.propertyId.value;
         let data;
-        
+   
         if (id) {
-            // Mise à jour
             data = await api(`/properties/${id}`, {
                 method: "PUT",
                 body: JSON.stringify(body)
             });
         } else {
-            // Création
             data = await api("/properties", {
                 method: "POST",
                 body: JSON.stringify(body)
             });
         }
-        
+   
         return { success: true, data };
     } catch (error) {
         return { success: false, error: error.message };
@@ -323,8 +304,7 @@ async function deleteProperty(propertyId) {
         await api(`/properties/${propertyId}`, {
             method: "DELETE"
         });
-        
-        // Mettre à jour la liste locale
+   
         properties = properties.filter(p => p.id !== propertyId);
         return { success: true };
     } catch (error) {
@@ -332,14 +312,13 @@ async function deleteProperty(propertyId) {
     }
 }
 
-// Fonctions pour les favoris
+// Favorite Functions
 async function toggleFavorite(propertyId, isFav) {
     try {
         await api(`/users/me/favorites/${propertyId}`, {
             method: isFav ? "DELETE" : "POST"
         });
-        
-        // Mettre à jour l'utilisateur local
+   
         if (currentUser) {
             if (isFav) {
                 currentUser.favorites = currentUser.favorites.filter(id => id !== propertyId);
@@ -348,22 +327,21 @@ async function toggleFavorite(propertyId, isFav) {
             }
             localStorage.setItem('currentUser', JSON.stringify(currentUser));
         }
-        
+   
         return { success: true };
     } catch (error) {
         return { success: false, error: error.message };
     }
 }
 
-// Fonctions pour les conversations
+// Conversation Functions
 async function startConversation(propertyId, otherUserId) {
     try {
         const data = await api(`/conversations/start`, {
             method: "POST",
             body: JSON.stringify({ property_id: propertyId, other_user_id: otherUserId })
         });
-        
-        // Mettre à jour la liste locale
+   
         conversations.push(data);
         return { success: true, data };
     } catch (error) {
@@ -396,22 +374,21 @@ async function sendChatMessage(conversationId, content) {
             method: "POST",
             body: JSON.stringify({ conversation_id: conversationId, content })
         });
-        
+   
         return { success: true, data };
     } catch (error) {
         return { success: false, error: error.message };
     }
 }
 
-// Fonctions pour les visites
+// Visit Functions
 async function scheduleVisit(propertyId, date, time, message) {
     try {
         const data = await api(`/visits/schedule`, {
             method: "POST",
             body: JSON.stringify({ property_id: propertyId, date, time, message })
         });
-        
-        // Mettre à jour la liste locale
+   
         visits.push(data);
         return { success: true, data };
     } catch (error) {
@@ -435,32 +412,29 @@ async function respondVisit(visitId, status, ownerResponse) {
             method: "POST",
             body: JSON.stringify({ visit_id: visitId, status, owner_response: ownerResponse })
         });
-        
-        // Mettre à jour la visite locale
+   
         const index = visits.findIndex(v => v.id === visitId);
         if (index !== -1) {
             visits[index] = data;
         }
-        
+   
         return { success: true, data };
     } catch (error) {
         return { success: false, error: error.message };
     }
 }
 
-// Fonction pour récupérer les données utilisateur
+// User Profile Functions
 async function fetchUserData(userId) {
     try {
-        // Vérifier d'abord si l'utilisateur est en cache
         if (currentUser && currentUser.id === userId) {
             return { success: true, data: currentUser };
         }
-        
+   
         const data = await api(`/users/${userId}`);
         return { success: true, data };
     } catch (error) {
         console.error("Erreur fetchUserData:", error);
-        // Retourner les données locales si disponibles
         const savedUser = localStorage.getItem('currentUser');
         if (savedUser) {
             const user = JSON.parse(savedUser);
@@ -472,76 +446,68 @@ async function fetchUserData(userId) {
     }
 }
 
-// Fonction pour mettre à jour le profil utilisateur
 async function updateUserProfile(profileData) {
     try {
         const data = await api(`/users/me`, {
             method: "PUT",
             body: JSON.stringify(profileData)
         });
-        
+   
         currentUser = data;
         localStorage.setItem('currentUser', JSON.stringify(currentUser));
-        
+   
         return { success: true, data };
     } catch (error) {
         return { success: false, error: error.message };
     }
 }
 
-// Fonction pour mettre à jour le mot de passe
 async function updateUserPassword(currentPassword, newPassword) {
     try {
         await api(`/users/me/password`, {
             method: "PUT",
             body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
         });
-        
+   
         return { success: true };
     } catch (error) {
         return { success: false, error: error.message };
     }
 }
 
-// Fonction pour mettre à jour les préférences
 async function updateUserPreferences(preferences) {
     try {
         const data = await api(`/users/me/preferences`, {
             method: "PUT",
             body: JSON.stringify(preferences)
         });
-        
+   
         currentUser.preferences = data;
         localStorage.setItem('currentUser', JSON.stringify(currentUser));
-        
+   
         return { success: true, data };
     } catch (error) {
         return { success: false, error: error.message };
     }
 }
 
-// Initialisation de l'application
+// Initialize Application
 async function initApp() {
     showLoading();
-    
+   
     try {
-        // Charger le thème
         const savedTheme = localStorage.getItem('theme');
         if (savedTheme === 'dark') {
             isDarkMode = true;
             document.body.setAttribute('data-theme', 'dark');
             document.getElementById('themeIcon').textContent = '☀️';
         }
-
-        // Vérifier si l'utilisateur est connecté
         const savedUser = localStorage.getItem('currentUser');
         authToken = localStorage.getItem("authToken");
-        
+   
         if (savedUser && authToken) {
             currentUser = JSON.parse(savedUser);
-            
             try {
-                // Vérifier la validité du token
                 const userData = await fetchUserData(currentUser.id);
                 if (userData.success) {
                     currentUser = userData.data;
@@ -565,39 +531,15 @@ async function initApp() {
         hideLoading();
     }
 }
-                
-                // Charger les données initiales
-                await Promise.all([
-                    fetchProperties().then(data => properties = data),
-                    loadConversationsList(),
-                    listVisits()
-                ]);
-            } else {
-                // Token invalide, déconnecter l'utilisateur
-                logout();
-            }
-        } catch (error) {
-            console.error("Erreur lors de l'initialisation:", error);
-            logout();
-        }
-    } else {
-        showScreen('welcome');
-    }
-}
 
-// Modifications des fonctions existantes pour utiliser l'API
-
+// Screen Navigation
 function showScreen(screenId, params = {}) {
-    // Hide all screens
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.remove('active');
     });
-    // Show selected screen
     document.getElementById(screenId).classList.add('active');
-    // Close mobile menu
     document.getElementById('navMenu').classList.remove('active');
     document.getElementById('hamburger').classList.remove('active');
-    // Load data if needed
     if (screenId === 'ownerDashboard') {
         loadOwnerProperties();
     } else if (screenId === 'tenantDashboard') {
@@ -615,16 +557,39 @@ function showScreen(screenId, params = {}) {
     }
 }
 
-// User Type Selection
+// Authentication Check
+function checkAuth() {
+    if (!currentUser || !authToken) {
+        showScreen('login');
+        return false;
+    }
+    return true;
+}
+
+// Show Add Property Form
+function showAddPropertyForm() {
+    if (!checkAuth()) return;
+   
+    const form = document.getElementById('propertyForm');
+    form.reset();
+    document.getElementById('propertyId').value = '';
+    currentPropertyImages = [];
+    updateImagePreviews();
+    document.querySelectorAll('input[name="amenity"]').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+   
+    showScreen('propertyForm');
+}
+
+// Event Listeners
 document.addEventListener('DOMContentLoaded', function() {
-    // Load saved theme
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'dark') {
         isDarkMode = true;
         document.body.setAttribute('data-theme', 'dark');
         document.getElementById('themeIcon').textContent = '☀️';
     }
-
     const userTypeOptions = document.querySelectorAll('.user-type-option');
     userTypeOptions.forEach(option => {
         option.addEventListener('click', function() {
@@ -633,8 +598,6 @@ document.addEventListener('DOMContentLoaded', function() {
             userType = this.getAttribute('data-type');
         });
     });
-
-    // Profile tabs
     const profileTabs = document.querySelectorAll('.profile-tab');
     profileTabs.forEach(tab => {
         tab.addEventListener('click', function() {
@@ -654,8 +617,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
-
-    // Messages tabs
     const messagesTabs = document.querySelectorAll('#messagesTabs .profile-tab');
     messagesTabs.forEach(tab => {
         tab.addEventListener('click', function() {
@@ -668,68 +629,64 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById(tabId + 'Tab').classList.add('active');
         });
     });
-
-    // Setup contact form submission
-    document.getElementById('contactForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        if (validateForm(this)) {
-            showLoading();
-            setTimeout(() => {
+    const setupFormListeners = () => {
+        const forms = [
+            { id: 'contactForm', handler: async () => {
+                await new Promise(resolve => setTimeout(resolve, 1000));
                 alert('Votre message a été envoyé! Nous vous répondrons dans les plus brefs délais.');
-                this.reset();
-                hideLoading();
-            }, 1000);
-        }
-    });
-
-    // Setup profile form submission
-    document.getElementById('profileForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        if (validateForm(this)) {
-            showLoading();
-            setTimeout(() => {
-                updateProfile();
-                hideLoading();
-            }, 1000);
-        }
-    });
-
-    // Setup security form submission
-    document.getElementById('securityForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        if (validateForm(this)) {
-            showLoading();
-            setTimeout(() => {
-                updatePassword();
-                hideLoading();
-            }, 1000);
-        }
-    });
-
-    // Setup preferences form submission
-    document.getElementById('preferencesForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        showLoading();
-        setTimeout(() => {
-            updatePreferences();
-            hideLoading();
-        }, 1000);
-    });
-
-    // Setup visit form
-    document.getElementById('visitForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        submitVisit();
-    });
-
-    // Chat input event listener
+                document.getElementById('contactForm').reset();
+            }},
+            { id: 'profileForm', handler: updateProfile },
+            { id: 'securityForm', handler: updatePassword },
+            { id: 'preferencesForm', handler: updatePreferences },
+            { id: 'visitForm', handler: submitVisit },
+            { id: 'reviewForm', handler: submitReview },
+            { id: 'propertyForm', handler: async function() {
+                const form = document.getElementById('propertyForm');
+                if (!validateForm(form)) return;
+                showLoading();
+                try {
+                    const result = await saveProperty(form);
+                    if (!result.success) {
+                        alert(result.error || "Erreur lors de la sauvegarde de la propriété");
+                        return;
+                    }
+                    alert(form.propertyId.value ? 'Propriété modifiée avec succès!' : 'Propriété ajoutée avec succès!');
+                    form.reset();
+                    currentPropertyImages = [];
+                    updateImagePreviews();
+                    showDashboard();
+                } catch (error) {
+                    alert("Erreur lors de la sauvegarde de la propriété: " + error.message);
+                } finally {
+                    hideLoading();
+                }
+            }}
+        ];
+        forms.forEach(({ id, handler }) => {
+            const form = document.getElementById(id);
+            if (form && !form.dataset.listenerAdded) {
+                form.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    if (validateForm(this)) {
+                        showLoading();
+                        try {
+                            await handler();
+                        } finally {
+                            hideLoading();
+                        }
+                    }
+                });
+                form.dataset.listenerAdded = 'true';
+            }
+        });
+    };
+    setupFormListeners();
     document.getElementById('chatInput').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
             sendChatMessage();
         }
     });
-
-    // Review stars selection
     document.querySelectorAll('#reviewStars i').forEach(star => {
         star.addEventListener('click', function() {
             currentReviewStars = parseInt(this.dataset.value);
@@ -738,103 +695,98 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
-
-    // Review form submission
-    document.getElementById('reviewForm').addEventListener('submit', function(e) {
+    document.getElementById('registerForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        submitReview();
+        if (!validateForm(this)) return;
+   
+        showLoading();
+        const fullName = document.getElementById('fullName').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const phone = document.getElementById('phone').value.trim();
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        if (password !== confirmPassword) {
+            document.getElementById('confirmPasswordError').textContent = 'Les mots de passe ne correspondent pas';
+            document.getElementById('confirmPasswordError').classList.add('active');
+            hideLoading();
+            return;
+        }
+        try {
+            const result = await registerUser(this);
+            if (!result.success) {
+                alert(result.error || "Erreur lors de l'inscription");
+                hideLoading();
+                return;
+            }
+            const successDiv = document.createElement('div');
+            successDiv.className = 'success-message';
+            successDiv.textContent = 'Inscription réussie ! Redirection...';
+            this.parentNode.insertBefore(successDiv, this);
+            updateNavForLoggedUser();
+            if (userType === 'tenant') {
+                document.getElementById('tenantName').textContent = fullName;
+                showScreen('tenantDashboard');
+            } else {
+                document.getElementById('ownerName').textContent = fullName;
+                showScreen('ownerDashboard');
+            }
+        } catch (error) {
+            document.getElementById('emailError').textContent = error.message || 'Erreur lors de l\'inscription';
+            document.getElementById('emailError').classList.add('active');
+        } finally {
+            hideLoading();
+        }
+    });
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        if (!validateForm(this)) return;
+   
+        showLoading();
+        try {
+            const result = await loginUser(this);
+            if (!result.success) {
+                document.getElementById('loginPasswordError').textContent = result.error || 'Email ou mot de passe incorrect';
+                document.getElementById('loginPasswordError').classList.add('active');
+                hideLoading();
+                return;
+            }
+            const successDiv = document.createElement('div');
+            successDiv.className = 'success-message';
+            successDiv.textContent = 'Connexion réussie ! Redirection...';
+            this.parentNode.insertBefore(successDiv, this);
+            updateNavForLoggedUser();
+            if (currentUser.type === 'tenant') {
+                document.getElementById('tenantName').textContent = currentUser.name;
+                showScreen('tenantDashboard');
+            } else {
+                document.getElementById('ownerName').textContent = currentUser.name;
+                showScreen('ownerDashboard');
+            }
+        } catch (error) {
+            document.getElementById('loginPasswordError').textContent = error.message || 'Email ou mot de passe incorrect';
+            document.getElementById('loginPasswordError').classList.add('active');
+        } finally {
+            hideLoading();
+        }
+    });
+    document.getElementById('searchForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        loadSearchResults();
+    });
+    document.getElementById('searchForm').addEventListener('input', debounce(loadSearchResults, 500));
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('modal')) {
+            e.target.classList.remove('active');
+        }
+    });
+    document.querySelectorAll('.modal-content').forEach(content => {
+        content.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
     });
 });
 
-// Registration Handler
-document.getElementById('registerForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    if (!validateForm(this)) return;
-    
-    showLoading();
-    const fullName = document.getElementById('fullName').value.trim();
-    const email = document.getElementById('email').value.trim();
-    const phone = document.getElementById('phone').value.trim();
-    const password = document.getElementById('password').value;
-    const confirmPassword = document.getElementById('confirmPassword').value;
-
-    // Additional validation
-    if (password !== confirmPassword) {
-        document.getElementById('confirmPasswordError').textContent = 'Les mots de passe ne correspondent pas';
-        document.getElementById('confirmPasswordError').classList.add('active');
-        hideLoading();
-        return;
-    }
-
-    try {
-        const result = await registerUser(this);
-        
-        if (!result.success) {
-            alert(result.error || "Erreur lors de l'inscription");
-            hideLoading();
-            return;
-        }
-
-        const successDiv = document.createElement('div');
-        successDiv.className = 'success-message';
-        successDiv.textContent = 'Inscription réussie ! Redirection...';
-        this.parentNode.insertBefore(successDiv, this);
-
-        updateNavForLoggedUser();
-        if (userType === 'tenant') {
-            document.getElementById('tenantName').textContent = fullName;
-            showScreen('tenantDashboard');
-        } else {
-            document.getElementById('ownerName').textContent = fullName;
-            showScreen('ownerDashboard');
-        }
-    } catch (error) {
-        document.getElementById('emailError').textContent = error.message || 'Erreur lors de l\'inscription';
-        document.getElementById('emailError').classList.add('active');
-    } finally {
-        hideLoading();
-    }
-});
-
-// Login Handler
-document.getElementById('loginForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    if (!validateForm(this)) return;
-    
-    showLoading();
-    
-    try {
-        const result = await loginUser(this);
-        
-        if (!result.success) {
-            document.getElementById('loginPasswordError').textContent = result.error || 'Email ou mot de passe incorrect';
-            document.getElementById('loginPasswordError').classList.add('active');
-            hideLoading();
-            return;
-        }
-
-        const successDiv = document.createElement('div');
-        successDiv.className = 'success-message';
-        successDiv.textContent = 'Connexion réussie ! Redirection...';
-        this.parentNode.insertBefore(successDiv, this);
-
-        updateNavForLoggedUser();
-        if (currentUser.type === 'tenant') {
-            document.getElementById('tenantName').textContent = currentUser.name;
-            showScreen('tenantDashboard');
-        } else {
-            document.getElementById('ownerName').textContent = currentUser.name;
-            showScreen('ownerDashboard');
-        }
-    } catch (error) {
-        document.getElementById('loginPasswordError').textContent = error.message || 'Email ou mot de passe incorrect';
-        document.getElementById('loginPasswordError').classList.add('active');
-    } finally {
-        hideLoading();
-    }
-});
-
-// Update Navigation for Logged Users
+// Navigation Update
 function updateNavForLoggedUser() {
     const authNavItems = document.getElementById('authNavItems');
     if (currentUser) {
@@ -862,10 +814,8 @@ function logout() {
         localStorage.removeItem('authToken');
         updateNavForLoggedUser();
         showScreen('welcome');
-        // Clear forms
         document.getElementById('registerForm').reset();
         document.getElementById('loginForm').reset();
-        // Reset user type selection
         document.querySelectorAll('.user-type-option').forEach(opt => {
             opt.classList.remove('active');
         });
@@ -875,12 +825,10 @@ function logout() {
     }, 1000);
 }
 
-// Load Profile Data (Own Profile)
+// Profile Management
 async function loadProfileData() {
     if (!currentUser) return;
-
     try {
-        // Récupérer les données à jour de l'utilisateur
         const userData = await fetchUserData(currentUser.id);
         if (userData.success) {
             currentUser = userData.data;
@@ -889,32 +837,24 @@ async function loadProfileData() {
     } catch (error) {
         console.error("Erreur lors du chargement du profil:", error);
     }
-
     document.getElementById('profileName').textContent = currentUser.name;
     document.getElementById('profileType').textContent = currentUser.type === 'tenant' ? 'Locataire' : 'Propriétaire';
     document.getElementById('profileEmail').textContent = currentUser.email;
     document.getElementById('profilePhone').textContent = currentUser.phone;
-
     document.getElementById('profileFullName').value = currentUser.name;
     document.getElementById('profilePhoneNumber').value = currentUser.phone;
     document.getElementById('profileEmailAddress').value = currentUser.email;
     document.getElementById('profileBio').value = currentUser.bio || '';
-
-    // Load avatar if exists
     if (currentUser.avatar) {
         document.getElementById('avatarPreview').src = currentUser.avatar;
         document.getElementById('profileAvatar').src = currentUser.avatar;
     }
-
-    // Load preferences
     if (currentUser.preferences) {
         document.getElementById('emailNotifications').checked = currentUser.preferences.emailNotifications;
         document.getElementById('smsNotifications').checked = currentUser.preferences.smsNotifications;
         document.getElementById('whatsappNotifications').checked = currentUser.preferences.whatsappNotifications;
         document.getElementById('language').value = currentUser.preferences.language;
     }
-
-    // Conditionally add tabs based on user type
     const tabsContainer = document.getElementById('profileTabs');
     tabsContainer.innerHTML = `
         <div class="profile-tab active" data-tab="edit">Modifier le profil</div>
@@ -931,8 +871,6 @@ async function loadProfileData() {
             <div class="profile-tab" data-tab="visits">Mes visites</div>
         `;
     }
-
-    // Re-attach event listeners to new tabs
     document.querySelectorAll('.profile-tab').forEach(tab => {
         tab.addEventListener('click', function() {
             const tabId = this.getAttribute('data-tab');
@@ -953,7 +891,6 @@ async function loadProfileData() {
     });
 }
 
-// Load User Profile Data (Public)
 async function loadUserProfileData(userId) {
     try {
         const userData = await fetchUserData(userId);
@@ -961,19 +898,15 @@ async function loadUserProfileData(userId) {
             alert("Erreur lors du chargement du profil utilisateur");
             return;
         }
-        
+   
         const user = userData.data;
-        
+   
         document.getElementById('userProfileName').textContent = user.name;
         document.getElementById('userProfileType').textContent = user.type === 'tenant' ? 'Locataire' : 'Propriétaire';
         document.getElementById('userProfileEmail').textContent = user.email;
         document.getElementById('userProfilePhone').textContent = user.phone;
         document.getElementById('userProfileBio').textContent = user.bio || 'Aucune bio disponible.';
-
-        // Load avatar
         document.getElementById('userProfileAvatar').src = user.avatar || `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><rect width='120' height='120' fill='%233b82f6'/><text x='60' y='70' font-family='Arial' font-size='40' fill='white' text-anchor='middle'>${user.name.charAt(0).toUpperCase()}</text></svg>`;
-
-        // Load publications if owner
         const publicationsContainer = document.getElementById('userProfilePublications');
         publicationsContainer.innerHTML = '';
         if (user.type === 'owner') {
@@ -996,21 +929,17 @@ async function loadUserProfileData(userId) {
     }
 }
 
-// Load Profile Publications (Own)
 async function loadProfilePublications() {
     if (!currentUser || currentUser.type !== 'owner') return;
-
     const publicationsContainer = document.getElementById('profilePublications');
     publicationsContainer.innerHTML = '';
-
     try {
         const userProperties = await fetchProperties({ owner_id: currentUser.id });
-        
+   
         if (userProperties.length === 0) {
             publicationsContainer.innerHTML = '<p class="text-center">Vous n\'avez pas encore de propriétés.</p>';
             return;
         }
-
         userProperties.forEach(property => {
             const propertyCard = createPropertyCard(property, true);
             publicationsContainer.appendChild(propertyCard);
@@ -1021,23 +950,17 @@ async function loadProfilePublications() {
     }
 }
 
-// Load Profile Favorites (Tenant)
 async function loadProfileFavorites() {
     if (!currentUser || currentUser.type !== 'tenant') return;
-
     const favoritesContainer = document.getElementById('profileFavorites');
     favoritesContainer.innerHTML = '';
-
     try {
-        // Récupérer les favoris de l'utilisateur
         const favoriteIds = currentUser.favorites || [];
-        
+   
         if (favoriteIds.length === 0) {
             favoritesContainer.innerHTML = '<p class="text-center">Aucun favori pour le moment.</p>';
             return;
         }
-
-        // Récupérer les propriétés favorites
         const favoriteProperties = [];
         for (const id of favoriteIds) {
             try {
@@ -1049,12 +972,10 @@ async function loadProfileFavorites() {
                 console.error(`Erreur lors du chargement de la propriété ${id}:`, error);
             }
         }
-
         if (favoriteProperties.length === 0) {
             favoritesContainer.innerHTML = '<p class="text-center">Aucun favori pour le moment.</p>';
             return;
         }
-
         favoriteProperties.forEach(property => {
             const propertyCard = createPropertyCard(property, false);
             favoritesContainer.appendChild(propertyCard);
@@ -1065,26 +986,21 @@ async function loadProfileFavorites() {
     }
 }
 
-// Load Profile Visits (Tenant)
 async function loadProfileVisits() {
     if (!currentUser || currentUser.type !== 'tenant') return;
-
     const visitsContainer = document.getElementById('profileVisits');
     visitsContainer.innerHTML = '';
-
     try {
         await listVisits();
         const userVisits = visits.filter(v => v.userId === currentUser.id);
-        
+   
         if (userVisits.length === 0) {
             visitsContainer.innerHTML = '<p class="text-center">Aucune visite programmée.</p>';
             return;
         }
-
         userVisits.forEach(visit => {
             const property = properties.find(p => p.id === visit.propertyId);
             if (!property) return;
-
             const visitCard = document.createElement('div');
             visitCard.className = 'visit-card';
             visitCard.innerHTML = `
@@ -1105,30 +1021,25 @@ async function loadProfileVisits() {
     }
 }
 
-// Update Profile
 async function updateProfile() {
     if (!currentUser) return;
-
     const fullName = document.getElementById('profileFullName').value.trim();
     const phone = document.getElementById('profilePhoneNumber').value.trim();
     const email = document.getElementById('profileEmailAddress').value.trim();
     const bio = document.getElementById('profileBio').value.trim();
-
     const profileData = {
         full_name: fullName,
         phone,
         email,
         bio
     };
-
     try {
         const result = await updateUserProfile(profileData);
-        
+   
         if (!result.success) {
             alert(result.error || "Erreur lors de la mise à jour du profil");
             return;
         }
-
         alert('Profil mis à jour avec succès!');
         loadProfileData();
     } catch (error) {
@@ -1136,26 +1047,22 @@ async function updateProfile() {
     }
 }
 
-// Update Password
 async function updatePassword() {
     const currentPassword = document.getElementById('currentPassword').value;
     const newPassword = document.getElementById('newPassword').value;
     const confirmPassword = document.getElementById('confirmNewPassword').value;
-
     if (newPassword !== confirmPassword) {
         document.getElementById('confirmNewPasswordError').textContent = 'Les mots de passe ne correspondent pas';
         document.getElementById('confirmNewPasswordError').classList.add('active');
         return;
     }
-
     try {
         const result = await updateUserPassword(currentPassword, newPassword);
-        
+   
         if (!result.success) {
             alert(result.error || "Erreur lors de la mise à jour du mot de passe");
             return;
         }
-
         alert('Mot de passe mis à jour avec succès!');
         document.getElementById('securityForm').reset();
     } catch (error) {
@@ -1163,41 +1070,34 @@ async function updatePassword() {
     }
 }
 
-// Update Preferences
 async function updatePreferences() {
     if (!currentUser) return;
-
     const preferences = {
         emailNotifications: document.getElementById('emailNotifications').checked,
         smsNotifications: document.getElementById('smsNotifications').checked,
         whatsappNotifications: document.getElementById('whatsappNotifications').checked,
         language: document.getElementById('language').value
     };
-
     try {
         const result = await updateUserPreferences(preferences);
-        
+   
         if (!result.success) {
             alert(result.error || "Erreur lors de la mise à jour des préférences");
             return;
         }
-
         alert('Préférences mises à jour avec succès!');
     } catch (error) {
         alert("Erreur lors de la mise à jour des préférences: " + error.message);
     }
 }
 
-// Avatar Upload
 function handleAvatarUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
-
     if (!file.type.startsWith('image/')) {
         alert('Veuillez sélectionner une image valide.');
         return;
     }
-
     const reader = new FileReader();
     reader.onload = function(event) {
         currentAvatar = event.target.result;
@@ -1207,20 +1107,17 @@ function handleAvatarUpload(e) {
     reader.readAsDataURL(file);
 }
 
-// Load Tenant Properties
 async function loadTenantProperties() {
     const propertiesContainer = document.getElementById('tenantProperties');
     propertiesContainer.innerHTML = '';
-
     try {
         const data = await fetchProperties();
         properties = data;
-        
+   
         if (properties.length === 0) {
             propertiesContainer.innerHTML = '<p class="text-center">Aucune propriété disponible pour le moment.</p>';
             return;
         }
-
         properties.forEach(property => {
             const propertyCard = createPropertyCard(property, false);
             propertiesContainer.appendChild(propertyCard);
@@ -1231,20 +1128,17 @@ async function loadTenantProperties() {
     }
 }
 
-// Load Owner Properties
 async function loadOwnerProperties() {
     const propertiesContainer = document.getElementById('ownerProperties');
     propertiesContainer.innerHTML = '';
-
     try {
         const data = await fetchProperties({ owner_id: currentUser.id });
         properties = data;
-        
+   
         if (properties.length === 0) {
             propertiesContainer.innerHTML = '<p class="text-center">Vous n\'avez pas encore de propriétés.</p>';
             return;
         }
-
         properties.forEach(property => {
             const propertyCard = createPropertyCard(property, true);
             propertiesContainer.appendChild(propertyCard);
@@ -1255,7 +1149,6 @@ async function loadOwnerProperties() {
     }
 }
 
-// Create Property Card
 function createPropertyCard(property, isOwner = false) {
     const card = document.createElement('div');
     card.className = 'property-card';
@@ -1291,25 +1184,21 @@ function createPropertyCard(property, isOwner = false) {
     return card;
 }
 
-// Toggle Favorite Handler
 async function toggleFavoriteHandler(event, propertyId) {
     event.stopPropagation();
     if (!currentUser) {
         alert('Veuillez vous connecter pour ajouter aux favoris.');
         return;
     }
-
     const isFav = currentUser.favorites && currentUser.favorites.includes(propertyId);
-    
+   
     try {
         const result = await toggleFavorite(propertyId, isFav);
-        
+   
         if (!result.success) {
             alert(result.error || "Erreur lors de la mise à jour des favoris");
             return;
         }
-
-        // Mettre à jour l'affichage
         const favoriteElement = event.currentTarget;
         if (isFav) {
             favoriteElement.classList.remove('active');
@@ -1321,18 +1210,15 @@ async function toggleFavoriteHandler(event, propertyId) {
     }
 }
 
-// Delete Property Handler
 async function deletePropertyHandler(propertyId) {
     if (!confirm('Êtes-vous sûr de vouloir supprimer cette propriété ?')) return;
-
     try {
         const result = await deleteProperty(propertyId);
-        
+   
         if (!result.success) {
             alert(result.error || "Erreur lors de la suppression de la propriété");
             return;
         }
-
         alert('Propriété supprimée avec succès!');
         loadOwnerProperties();
     } catch (error) {
@@ -1340,12 +1226,9 @@ async function deletePropertyHandler(propertyId) {
     }
 }
 
-// Edit Property
 function editProperty(propertyId) {
     const property = properties.find(p => p.id === propertyId);
     if (!property) return;
-
-    // Populate form
     document.getElementById('propertyId').value = property.id;
     document.getElementById('propertyTitle').value = property.title;
     document.getElementById('propertyPrice').value = property.price;
@@ -1359,25 +1242,17 @@ function editProperty(propertyId) {
     document.getElementById('propertyCity').value = property.city;
     document.getElementById('propertyWhatsApp').value = property.whatsapp;
     document.getElementById('propertyDescription').value = property.description;
-
-    // Set amenities
     document.querySelectorAll('input[name="amenity"]').forEach(checkbox => {
         checkbox.checked = property.amenities && property.amenities.includes(checkbox.value);
     });
-
-    // Set images
     currentPropertyImages = property.images || [];
     updateImagePreviews();
-
-    // Show form
     showScreen('propertyForm');
 }
 
-// Update Image Previews
 function updateImagePreviews() {
     const previewContainer = document.getElementById('imagePreviews');
     previewContainer.innerHTML = '';
-
     currentPropertyImages.forEach((image, index) => {
         const preview = document.createElement('div');
         preview.className = 'image-preview';
@@ -1389,21 +1264,17 @@ function updateImagePreviews() {
     });
 }
 
-// Remove Image
 function removeImage(index) {
     currentPropertyImages.splice(index, 1);
     updateImagePreviews();
 }
 
-// Handle Image Upload
 function handleImageUpload(e) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (!file.type.startsWith('image/')) continue;
-
         const reader = new FileReader();
         reader.onload = function(event) {
             currentPropertyImages.push(event.target.result);
@@ -1411,51 +1282,18 @@ function handleImageUpload(e) {
         };
         reader.readAsDataURL(file);
     }
-
-    // Reset input
     e.target.value = '';
 }
 
-// Submit Property Form
-document.getElementById('propertyForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    if (!validateForm(this)) return;
-
-    showLoading();
-    
-    try {
-        const result = await saveProperty(this);
-        
-        if (!result.success) {
-            alert(result.error || "Erreur lors de la sauvegarde de la propriété");
-            hideLoading();
-            return;
-        }
-
-        alert(document.getElementById('propertyId').value ? 'Propriété modifiée avec succès!' : 'Propriété ajoutée avec succès!');
-        this.reset();
-        currentPropertyImages = [];
-        updateImagePreviews();
-        showDashboard();
-    } catch (error) {
-        alert("Erreur lors de la sauvegarde de la propriété: " + error.message);
-    } finally {
-        hideLoading();
-    }
-});
-
-// Load Modal Reviews
 async function loadModalReviews(propertyId) {
     try {
         const property = await api(`/properties/${propertyId}`);
         const reviewsContainer = document.getElementById('modalReviews');
         reviewsContainer.innerHTML = '';
-
         if (!property.reviews || property.reviews.length === 0) {
             reviewsContainer.innerHTML = '<p class="text-center">Aucun avis pour le moment.</p>';
             return;
         }
-
         property.reviews.forEach(review => {
             const reviewElement = document.createElement('div');
             reviewElement.className = 'review';
@@ -1475,32 +1313,27 @@ async function loadModalReviews(propertyId) {
     }
 }
 
-// Submit Review
 async function submitReview() {
     if (!currentUser) {
         alert('Veuillez vous connecter pour laisser un avis.');
         return;
     }
-
     const comment = document.getElementById('reviewComment').value.trim();
     if (!comment) {
         alert('Veuillez saisir un commentaire.');
         return;
     }
-
     if (currentReviewStars === 0) {
         alert('Veuillez sélectionner une note.');
         return;
     }
-
     try {
         const result = await submitReview(modalPropertyId, currentReviewStars, comment);
-        
+   
         if (!result.success) {
             alert(result.error || "Erreur lors de l'envoi de l'avis");
             return;
         }
-
         alert('Avis envoyé avec succès!');
         document.getElementById('reviewComment').value = '';
         currentReviewStars = 0;
@@ -1513,11 +1346,9 @@ async function submitReview() {
     }
 }
 
-// Show Visit Form
 function showVisitForm(propertyId) {
     const property = properties.find(p => p.id === propertyId);
     if (!property) return;
-
     currentWhatsAppProperty = property;
     document.getElementById('visitPropertyTitle').textContent = property.title;
     document.getElementById('visitPropertyAddress').textContent = `${property.address}, ${property.city}`;
@@ -1528,30 +1359,25 @@ function showVisitForm(propertyId) {
     document.getElementById('visitModal').classList.add('active');
 }
 
-// Submit Visit
 async function submitVisit() {
     if (!currentUser) {
         alert('Veuillez vous connecter pour planifier une visite.');
         return;
     }
-
     const date = document.getElementById('visitDate').value;
     const time = document.getElementById('visitTime').value;
     const message = document.getElementById('visitMessage').value.trim();
-
     if (!date || !time) {
         alert('Veuillez sélectionner une date et une heure.');
         return;
     }
-
     try {
         const result = await scheduleVisit(currentWhatsAppProperty.id, date, time, message);
-        
+   
         if (!result.success) {
             alert(result.error || "Erreur lors de la planification de la visite");
             return;
         }
-
         alert('Visite planifiée avec succès! Le propriétaire sera informé.');
         document.getElementById('visitModal').classList.remove('active');
     } catch (error) {
@@ -1559,27 +1385,23 @@ async function submitVisit() {
     }
 }
 
-// Load Conversations
 async function loadConversations() {
     const conversationsContainer = document.getElementById('conversationsList');
     conversationsContainer.innerHTML = '';
-
     try {
         const result = await loadConversationsList();
         if (!result.success) {
             conversationsContainer.innerHTML = '<p class="text-center">Erreur lors du chargement des conversations.</p>';
             return;
         }
-
         if (conversations.length === 0) {
             conversationsContainer.innerHTML = '<p class="text-center">Aucune conversation.</p>';
             return;
         }
-
         conversations.forEach(conversation => {
             const otherUser = conversation.participants.find(p => p.id !== currentUser.id);
             const lastMessage = conversation.lastMessage;
-            
+   
             const conversationElement = document.createElement('div');
             conversationElement.className = 'conversation';
             conversationElement.innerHTML = `
@@ -1604,30 +1426,26 @@ async function loadConversations() {
     }
 }
 
-// Load Visit Requests
 async function loadVisitRequests() {
     const visitsContainer = document.getElementById('visitsList');
     visitsContainer.innerHTML = '';
-
     try {
         await listVisits();
-        const userVisits = currentUser.type === 'owner' 
+        const userVisits = currentUser.type === 'owner'
             ? visits.filter(v => v.ownerId === currentUser.id)
             : visits.filter(v => v.userId === currentUser.id);
-        
+   
         if (userVisits.length === 0) {
             visitsContainer.innerHTML = '<p class="text-center">Aucune demande de visite.</p>';
             return;
         }
-
         userVisits.forEach(visit => {
             const property = properties.find(p => p.id === visit.propertyId);
             if (!property) return;
-
-            const user = currentUser.type === 'owner' 
+            const user = currentUser.type === 'owner'
                 ? users.find(u => u.id === visit.userId)
                 : users.find(u => u.id === visit.ownerId);
-            
+   
             const visitElement = document.createElement('div');
             visitElement.className = 'visit-request';
             visitElement.innerHTML = `
@@ -1655,19 +1473,16 @@ async function loadVisitRequests() {
     }
 }
 
-// Respond to Visit
 async function respondToVisit(visitId, status) {
     const ownerResponse = prompt('Veuillez saisir votre réponse (optionnel):');
-    if (ownerResponse === null) return; // User cancelled
-
+    if (ownerResponse === null) return;
     try {
         const result = await respondVisit(visitId, status, ownerResponse || '');
-        
+   
         if (!result.success) {
             alert(result.error || "Erreur lors de la réponse à la visite");
             return;
         }
-
         alert('Réponse envoyée avec succès!');
         loadVisitRequests();
     } catch (error) {
@@ -1675,7 +1490,6 @@ async function respondToVisit(visitId, status) {
     }
 }
 
-// Open Chat
 async function openChat(conversationId, otherUserId, propertyId) {
     currentChat = { conversationId, otherUserId, propertyId };
     document.getElementById('chatHeader').innerHTML = `
@@ -1691,25 +1505,21 @@ async function openChat(conversationId, otherUserId, propertyId) {
     loadChatMessages(conversationId);
 }
 
-// Load Chat Messages
 async function loadChatMessages(conversationId) {
     const messagesContainer = document.getElementById('chatMessages');
     messagesContainer.innerHTML = '';
-
     try {
         const result = await loadChatMessages(conversationId);
         if (!result.success) {
             messagesContainer.innerHTML = '<p class="text-center">Erreur lors du chargement des messages.</p>';
             return;
         }
-
         const messages = result.data;
-        
+   
         if (messages.length === 0) {
             messagesContainer.innerHTML = '<p class="text-center">Aucun message.</p>';
             return;
         }
-
         messages.forEach(message => {
             const messageElement = document.createElement('div');
             messageElement.className = `message ${message.senderId === currentUser.id ? 'sent' : 'received'}`;
@@ -1719,8 +1529,6 @@ async function loadChatMessages(conversationId) {
             `;
             messagesContainer.appendChild(messageElement);
         });
-
-        // Scroll to bottom
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     } catch (error) {
         console.error("Erreur lors du chargement des messages:", error);
@@ -1728,21 +1536,17 @@ async function loadChatMessages(conversationId) {
     }
 }
 
-// Send Chat Message
 async function sendChatMessage() {
     const input = document.getElementById('chatInput');
     const content = input.value.trim();
     if (!content) return;
-
     try {
         const result = await sendChatMessage(currentChat.conversationId, content);
-        
+   
         if (!result.success) {
             alert(result.error || "Erreur lors de l'envoi du message");
             return;
         }
-
-        // Add message to UI
         const messagesContainer = document.getElementById('chatMessages');
         const messageElement = document.createElement('div');
         messageElement.className = 'message sent';
@@ -1751,8 +1555,7 @@ async function sendChatMessage() {
             <div class="message-time">${formatTime(new Date())}</div>
         `;
         messagesContainer.appendChild(messageElement);
-        
-        // Clear input and scroll to bottom
+   
         input.value = '';
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     } catch (error) {
@@ -1760,22 +1563,14 @@ async function sendChatMessage() {
     }
 }
 
-// Close Chat
 function closeChat() {
     document.getElementById('chatContainer').classList.remove('active');
     currentChat = { conversationId: null, otherUserId: null, propertyId: null };
 }
 
-// Search Properties
-document.getElementById('searchForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    loadSearchResults();
-});
-
 async function loadSearchResults() {
     const searchContainer = document.getElementById('searchResults');
     searchContainer.innerHTML = '';
-
     const type = document.getElementById('searchType').value;
     const city = document.getElementById('searchCity').value;
     const minPrice = document.getElementById('searchMinPrice').value;
@@ -1784,7 +1579,6 @@ async function loadSearchResults() {
     const minBedrooms = document.getElementById('searchMinBedrooms').value;
     const minBathrooms = document.getElementById('searchMinBathrooms').value;
     const minSurface = document.getElementById('searchMinSurface').value;
-
     const filters = {};
     if (type) filters.type = type;
     if (city) filters.city = city;
@@ -1794,16 +1588,14 @@ async function loadSearchResults() {
     if (minBedrooms) filters.min_bedrooms = minBedrooms;
     if (minBathrooms) filters.min_bathrooms = minBathrooms;
     if (minSurface) filters.min_surface = minSurface;
-
     try {
         const data = await fetchProperties(filters);
         properties = data;
-        
+   
         if (properties.length === 0) {
             searchContainer.innerHTML = '<p class="text-center">Aucun résultat trouvé.</p>';
             return;
         }
-
         properties.forEach(property => {
             const propertyCard = createPropertyCard(property, false);
             searchContainer.appendChild(propertyCard);
@@ -1816,15 +1608,14 @@ async function loadSearchResults() {
 
 // Utility Functions
 function showLoading() {
-  const loader = document.getElementById("loading");
-  if (loader) loader.classList.remove("hidden");
+    const loader = document.getElementById("loading");
+    if (loader) loader.classList.remove("hidden");
 }
 
 function hideLoading() {
-  const loader = document.getElementById("loading");
-  if (loader) loader.classList.add("hidden");
+    const loader = document.getElementById("loading");
+    if (loader) loader.classList.add("hidden");
 }
-
 
 function validateForm(form) {
     let isValid = true;
@@ -1834,6 +1625,20 @@ function validateForm(form) {
             const errorElement = document.getElementById(input.id + 'Error');
             if (errorElement) {
                 errorElement.textContent = 'Ce champ est requis';
+                errorElement.classList.add('active');
+            }
+        } else if (input.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value)) {
+            isValid = false;
+            const errorElement = document.getElementById(input.id + 'Error');
+            if (errorElement) {
+                errorElement.textContent = 'Format d\'email invalide';
+                errorElement.classList.add('active');
+            }
+        } else if (input.id.includes('phone') && !/^\+?\d{10,}$/.test(input.value)) {
+            isValid = false;
+            const errorElement = document.getElementById(input.id + 'Error');
+            if (errorElement) {
+                errorElement.textContent = 'Numéro de téléphone invalide';
                 errorElement.classList.add('active');
             }
         }
@@ -1865,94 +1670,20 @@ function formatTime(date) {
 }
 
 function showDashboard() {
-    if (currentUser.type === 'tenant') {
+    if (currentUser?.type === 'tenant') {
         showScreen('tenantDashboard');
     } else {
         showScreen('ownerDashboard');
     }
 }
 
-// Close modals when clicking outside
-document.addEventListener('click', function(e) {
-    if (e.target.classList.contains('modal')) {
-        e.target.classList.remove('active');
-    }
-});
-
-// Prevent modal content clicks from closing modal
-document.querySelectorAll('.modal-content').forEach(content => {
-    content.addEventListener('click', function(e) {
-        e.stopPropagation();
-    });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    // Définir l'URL de ton backend Render
-const API_BASE = "https://dz-loc.onrender.com";
-
-// Ensuite tu utilises API_BASE dans tes fonctions fetch()
-async function register(fullName, email, password, phone) {
-  const res = await fetch(`${API_BASE}/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fullName, email, password, phone })
-  });
-  return await res.json();
+function debounce(func, wait) {
+    let timeout;
+    return function (...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
 }
-
-});
 
 // Initialize the app
 initApp();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-function checkAuth() {
-    if (!currentUser || !authToken) {
-        showScreen('login');
-        return false;
-    }
-    return true;
-}
-
-// Modifiez vos fonctions pour inclure cette vérification
-function showAddPropertyForm() {
-    if (!checkAuth()) return;
-    
-    // Reset form
-    document.getElementById('propertyForm').reset();
-    document.getElementById('propertyId').value = '';
-    currentPropertyImages = [];
-    updateImagePreviews();
-    
-    // Show the form screen
-    showScreen('propertyForm');
-}
