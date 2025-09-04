@@ -33,7 +33,7 @@ let currentReviewStars = 0;
 let modalPropertyId = null;
 
 // Configuration API
-const API_BASE = "https://ton-service.onrender.com";
+const API_BASE = "https://dz-loc.onrender.com";
 let authToken = localStorage.getItem("authToken") || null;
 
 // Fonction utilitaire pour les appels API
