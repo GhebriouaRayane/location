@@ -1,5 +1,5 @@
 // Configuration API
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "https://dz-loc.onrender.com";
+const API_BASE = window._env_?.API_BASE || "https://dz-loc.onrender.com";
 let authToken = localStorage.getItem("authToken") || null;
 
 // Theme Management
