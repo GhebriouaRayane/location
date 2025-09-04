@@ -1403,3 +1403,23 @@ body {
     border-top-color: #fff;
     animation: spin 1s ease-in-out infinite;
 }
+
+
+
+/* === Loader Styles === */
+.loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.hidden {
+  display: none;
+}
