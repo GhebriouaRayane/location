@@ -1,3 +1,20 @@
+// Function to show add property form
+function showAddPropertyForm() {
+    // Reset form
+    document.getElementById('propertyForm').reset();
+    document.getElementById('propertyId').value = '';
+    currentPropertyImages = [];
+    updateImagePreviews();
+    
+    // Show the form screen
+    showScreen('propertyForm');
+}
+
+
+
+
+
+
 // Theme Management
 let isDarkMode = false;
 function toggleTheme() {
