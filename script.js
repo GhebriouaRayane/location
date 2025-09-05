@@ -1,5 +1,5 @@
-// Configuration de l'API
-const API_BASE_URL = 'https://dz-loc.onrender.com'; // Remplacez par votre URL Render
+// Configuration de l'API - Remplacez par votre URL Render
+const API_BASE_URL = 'https://dz-loc.onrender.com';
 
 // Gestion du thème
 let isDarkMode = false;
@@ -690,7 +690,7 @@ async function loadProfileVisits() {
                 <p><strong>Adresse:</strong> ${property.address}, ${property.city}</p>
                 ${visit.message ? `<p><strong>Message:</strong> ${visit.message}</p>` : ''}
                 ${visit.ownerResponse ? `<p><strong>Réponse du propriétaire:</strong> ${visit.ownerResponse}</p>` : ''}
-            `;
+        `;
             visitsContainer.appendChild(visitCard);
         }
         
