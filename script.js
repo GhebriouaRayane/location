@@ -1,5 +1,14 @@
-// Configuration de l'API - Remplacez par votre URL Render
-const API_BASE_URL = 'https://dz-loc.onrender.com';
+// Configuration - Stockage local
+const STORAGE_KEYS = {
+    USERS: 'dz_loc_users',
+    PROPERTIES: 'dz_loc_properties',
+    CONVERSATIONS: 'dz_loc_conversations',
+    VISITS: 'dz_loc_visits',
+    CURRENT_USER: 'dz_loc_current_user',
+    FAVORITES: 'dz_loc_favorites',
+    REVIEWS: 'dz_loc_reviews',
+    SAVED_SEARCHES: 'dz_loc_saved_searches'
+};
 
 // Gestion du thème
 let isDarkMode = false;
@@ -7,7 +16,6 @@ function toggleTheme() {
     isDarkMode = !isDarkMode;
     document.body.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
     document.getElementById('themeIcon').textContent = isDarkMode ? '☀️' : '🌙';
-    // Sauvegarder la préférence de thème
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
 }
 
@@ -35,53 +43,660 @@ let modalPropertyOwnerId = null;
 let currentReviewStars = 0;
 let modalPropertyId = null;
 
-// Fonctions d'API
+// Fonctions de stockage local
+function getStorageData(key) {
+    try {
+        const data = localStorage.getItem(key);
+        return data ? JSON.parse(data) : (key === STORAGE_KEYS.USERS ? [] : []);
+    } catch (error) {
+        console.error('Erreur de lecture du localStorage:', error);
+        return [];
+    }
+}
+
+function setStorageData(key, data) {
+    try {
+        localStorage.setItem(key, JSON.stringify(data));
+        return true;
+    } catch (error) {
+        console.error('Erreur d\'écriture dans le localStorage:', error);
+        return false;
+    }
+}
+
+// Simulation d'appels API avec localStorage
 async function apiCall(endpoint, options = {}) {
-    const token = localStorage.getItem('token');
-    const defaultOptions = {
-        headers: {
-            'Content-Type': 'application/json',
-            ...(token && { 'Authorization': `Bearer ${token}` })
-        }
-    };
+    // Simuler un délai réseau
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    const method = options.method || 'GET';
+    const body = options.body ? JSON.parse(options.body) : null;
 
     try {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-            ...defaultOptions,
-            ...options,
-            headers: {
-                ...defaultOptions.headers,
-                ...options.headers
-            }
-        });
+        switch (endpoint) {
+            // Authentification
+            case '/api/auth/register':
+                return handleRegister(body);
+            case '/api/auth/login':
+                return handleLogin(body);
+            case '/api/auth/me':
+                return handleGetCurrentUser();
+            case '/api/auth/logout':
+                return handleLogout();
 
-        if (!response.ok) {
-            throw new Error(`Erreur API: ${response.status}`);
+            // Utilisateurs
+            case '/api/users/profile':
+                return method === 'PUT' ? handleUpdateProfile(body) : null;
+            case '/api/users/change-password':
+                return handleChangePassword(body);
+            case '/api/users/preferences':
+                return handleUpdatePreferences(body);
+            case '/api/users/favorites':
+                return method === 'GET' ? handleGetFavorites() : null;
+            case '/api/users/toggle-favorite':
+                return handleToggleFavorite(body);
+            case '/api/users/saved-searches':
+                return handleSaveSearch(body);
+            case `/api/users/${endpoint.split('/')[3]}`:
+                const userId = endpoint.split('/')[3];
+                return handleGetUser(userId);
+            case `/api/users/${endpoint.split('/')[3]}/properties`:
+                const ownerId = endpoint.split('/')[3];
+                return handleGetUserProperties(ownerId);
+
+            // Propriétés
+            case '/api/properties':
+                if (method === 'POST') return handleCreateProperty(body);
+                // Gérer les query params pour la recherche
+                const urlParams = new URLSearchParams(endpoint.split('?')[1]);
+                return handleGetProperties(urlParams);
+            case '/api/properties/my-properties':
+                return handleGetMyProperties();
+            case `/api/properties/${endpoint.split('/')[3]}`:
+                const propId = endpoint.split('/')[3];
+                if (method === 'PUT') return handleUpdateProperty(propId, body);
+                if (method === 'DELETE') return handleDeleteProperty(propId);
+                return handleGetProperty(propId);
+            case `/api/properties/${endpoint.split('/')[3]}/view`:
+                return handleIncrementViews(endpoint.split('/')[3]);
+            case `/api/properties/${endpoint.split('/')[3]}/reviews`:
+                return method === 'POST' ? handleCreateReview(endpoint.split('/')[3], body) : null;
+
+            // Conversations
+            case '/api/conversations':
+                return method === 'POST' ? handleCreateConversation(body) : handleGetConversations();
+            case '/api/conversations/my-conversations':
+                return handleGetMyConversations();
+            case `/api/conversations/property/${endpoint.split('/')[4]}/user/${endpoint.split('/')[6]}`:
+                const propertyId = endpoint.split('/')[4];
+                const otherUserId = endpoint.split('/')[6];
+                return handleGetConversation(propertyId, otherUserId);
+            case '/api/conversations/message':
+                return handleSendMessage(body);
+
+            // Visites
+            case '/api/visits':
+                return method === 'POST' ? handleCreateVisit(body) : null;
+            case '/api/visits/my-visits':
+                return handleGetMyVisits();
+            case '/api/visits/my-property-visits':
+                return handleGetMyPropertyVisits();
+            case `/api/visits/${endpoint.split('/')[3]}/respond`:
+                const visitId = endpoint.split('/')[3];
+                return handleRespondToVisit(visitId, body);
+
+            // Contact
+            case '/api/contact':
+                return { success: true };
+
+            default:
+                throw new Error(`Endpoint non trouvé: ${endpoint}`);
         }
-
-        return await response.json();
     } catch (error) {
-        console.error('Erreur API:', error);
+        console.error('Erreur API simulée:', error);
         throw error;
     }
 }
 
-// Charger les données depuis l'API
-async function loadInitialData() {
+// Gestionnaires d'authentification
+function handleRegister(userData) {
+    const users = getStorageData(STORAGE_KEYS.USERS);
+    
+    // Vérifier si l'email existe déjà
+    if (users.find(user => user.email === userData.email)) {
+        throw new Error('Un utilisateur avec cet email existe déjà');
+    }
+
+    // Créer le nouvel utilisateur
+    const newUser = {
+        id: Date.now().toString(),
+        name: userData.name,
+        email: userData.email,
+        phone: userData.phone,
+        password: userData.password,
+        type: userData.type,
+        bio: '',
+        avatar: null,
+        preferences: {
+            emailNotifications: true,
+            smsNotifications: false,
+            whatsappNotifications: true,
+            language: 'fr'
+        },
+        createdAt: new Date().toISOString()
+    };
+
+    users.push(newUser);
+    setStorageData(STORAGE_KEYS.USERS, users);
+    
+    // Stocker l'utilisateur courant
+    setStorageData(STORAGE_KEYS.CURRENT_USER, newUser);
+
+    return {
+        token: 'simulated-jwt-token',
+        user: newUser
+    };
+}
+
+function handleLogin(loginData) {
+    const users = getStorageData(STORAGE_KEYS.USERS);
+    const user = users.find(u => u.email === loginData.email && u.password === loginData.password);
+
+    if (!user) {
+        throw new Error('Email ou mot de passe incorrect');
+    }
+
+    // Stocker l'utilisateur courant
+    setStorageData(STORAGE_KEYS.CURRENT_USER, user);
+
+    return {
+        token: 'simulated-jwt-token',
+        user: user
+    };
+}
+
+function handleGetCurrentUser() {
+    const user = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    if (!user || !user.id) {
+        throw new Error('Utilisateur non connecté');
+    }
+    return user;
+}
+
+function handleLogout() {
+    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+    return { success: true };
+}
+
+// Gestionnaires d'utilisateurs
+function handleUpdateProfile(profileData) {
+    const users = getStorageData(STORAGE_KEYS.USERS);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    
+    const userIndex = users.findIndex(u => u.id === currentUser.id);
+    if (userIndex === -1) {
+        throw new Error('Utilisateur non trouvé');
+    }
+
+    users[userIndex] = { ...users[userIndex], ...profileData };
+    setStorageData(STORAGE_KEYS.USERS, users);
+    setStorageData(STORAGE_KEYS.CURRENT_USER, users[userIndex]);
+
+    return users[userIndex];
+}
+
+function handleChangePassword(passwordData) {
+    const users = getStorageData(STORAGE_KEYS.USERS);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    
+    const userIndex = users.findIndex(u => u.id === currentUser.id);
+    if (userIndex === -1) {
+        throw new Error('Utilisateur non trouvé');
+    }
+
+    // Vérifier l'ancien mot de passe
+    if (users[userIndex].password !== passwordData.currentPassword) {
+        throw new Error('Mot de passe actuel incorrect');
+    }
+
+    users[userIndex].password = passwordData.newPassword;
+    setStorageData(STORAGE_KEYS.USERS, users);
+    setStorageData(STORAGE_KEYS.CURRENT_USER, users[userIndex]);
+
+    return { success: true };
+}
+
+function handleUpdatePreferences(preferencesData) {
+    const users = getStorageData(STORAGE_KEYS.USERS);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    
+    const userIndex = users.findIndex(u => u.id === currentUser.id);
+    if (userIndex === -1) {
+        throw new Error('Utilisateur non trouvé');
+    }
+
+    users[userIndex].preferences = { ...users[userIndex].preferences, ...preferencesData };
+    setStorageData(STORAGE_KEYS.USERS, users);
+    setStorageData(STORAGE_KEYS.CURRENT_USER, users[userIndex]);
+
+    return { success: true };
+}
+
+function handleGetUser(userId) {
+    const users = getStorageData(STORAGE_KEYS.USERS);
+    const user = users.find(u => u.id === userId);
+    if (!user) {
+        throw new Error('Utilisateur non trouvé');
+    }
+    
+    // Ne pas renvoyer le mot de passe
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+}
+
+function handleGetUserProperties(ownerId) {
+    const properties = getStorageData(STORAGE_KEYS.PROPERTIES);
+    return properties.filter(p => p.ownerId === ownerId);
+}
+
+function handleSaveSearch(searchData) {
+    const savedSearches = getStorageData(STORAGE_KEYS.SAVED_SEARCHES);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    
+    const newSearch = {
+        id: Date.now().toString(),
+        userId: currentUser.id,
+        ...searchData,
+        createdAt: new Date().toISOString()
+    };
+
+    savedSearches.push(newSearch);
+    setStorageData(STORAGE_KEYS.SAVED_SEARCHES, savedSearches);
+    return { success: true };
+}
+
+// Gestionnaires de favoris
+function handleGetFavorites() {
+    const favorites = getStorageData(STORAGE_KEYS.FAVORITES);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    const properties = getStorageData(STORAGE_KEYS.PROPERTIES);
+    
+    const userFavorites = favorites.filter(f => f.userId === currentUser.id);
+    const favoriteProperties = properties.filter(p => 
+        userFavorites.some(f => f.propertyId === p.id)
+    );
+    
+    // Ajouter les reviews aux propriétés
+    const reviews = getStorageData(STORAGE_KEYS.REVIEWS);
+    return favoriteProperties.map(property => ({
+        ...property,
+        reviews: reviews.filter(r => r.propertyId === property.id)
+    }));
+}
+
+function handleToggleFavorite(data) {
+    const favorites = getStorageData(STORAGE_KEYS.FAVORITES);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    
+    const existingIndex = favorites.findIndex(f => 
+        f.userId === currentUser.id && f.propertyId === data.propertyId
+    );
+
+    if (existingIndex >= 0) {
+        favorites.splice(existingIndex, 1);
+    } else {
+        favorites.push({
+            id: Date.now().toString(),
+            userId: currentUser.id,
+            propertyId: data.propertyId,
+            createdAt: new Date().toISOString()
+        });
+    }
+
+    setStorageData(STORAGE_KEYS.FAVORITES, favorites);
+    return { success: true };
+}
+
+// Gestionnaires de propriétés
+function handleGetProperties(urlParams = null) {
+    let properties = getStorageData(STORAGE_KEYS.PROPERTIES);
+    const reviews = getStorageData(STORAGE_KEYS.REVIEWS);
+
+    // Filtrer selon les paramètres de recherche
+    if (urlParams) {
+        const city = urlParams.get('city');
+        const type = urlParams.get('type');
+        const minPrice = urlParams.get('minPrice');
+        const maxPrice = urlParams.get('maxPrice');
+        const minSurface = urlParams.get('minSurface');
+        const bedrooms = urlParams.get('bedrooms');
+        const amenities = urlParams.getAll('amenities');
+        const sortBy = urlParams.get('sortBy');
+
+        if (city) {
+            properties = properties.filter(p => 
+                p.city.toLowerCase().includes(city.toLowerCase())
+            );
+        }
+        if (type) {
+            properties = properties.filter(p => p.type === type);
+        }
+        if (minPrice) {
+            properties = properties.filter(p => p.price >= parseInt(minPrice));
+        }
+        if (maxPrice) {
+            properties = properties.filter(p => p.price <= parseInt(maxPrice));
+        }
+        if (minSurface) {
+            properties = properties.filter(p => p.surface >= parseInt(minSurface));
+        }
+        if (bedrooms) {
+            properties = properties.filter(p => p.bedrooms >= parseInt(bedrooms));
+        }
+        if (amenities.length > 0) {
+            properties = properties.filter(p => 
+                amenities.every(amenity => p.amenities.includes(amenity))
+            );
+        }
+        if (sortBy) {
+            switch(sortBy) {
+                case 'price_asc':
+                    properties.sort((a, b) => a.price - b.price);
+                    break;
+                case 'price_desc':
+                    properties.sort((a, b) => b.price - a.price);
+                    break;
+                case 'newest':
+                    properties.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                    break;
+            }
+        }
+    }
+
+    // Ajouter les reviews à chaque propriété
+    return properties.map(property => ({
+        ...property,
+        reviews: reviews.filter(r => r.propertyId === property.id)
+    }));
+}
+
+function handleGetMyProperties() {
+    const properties = getStorageData(STORAGE_KEYS.PROPERTIES);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    const reviews = getStorageData(STORAGE_KEYS.REVIEWS);
+    
+    const myProperties = properties.filter(p => p.ownerId === currentUser.id);
+    
+    // Ajouter les reviews aux propriétés
+    return myProperties.map(property => ({
+        ...property,
+        reviews: reviews.filter(r => r.propertyId === property.id)
+    }));
+}
+
+function handleGetProperty(propertyId) {
+    const properties = getStorageData(STORAGE_KEYS.PROPERTIES);
+    const reviews = getStorageData(STORAGE_KEYS.REVIEWS);
+    
+    const property = properties.find(p => p.id === propertyId);
+    if (!property) {
+        throw new Error('Propriété non trouvée');
+    }
+
+    // Ajouter les avis à la propriété
+    property.reviews = reviews.filter(r => r.propertyId === propertyId);
+    return property;
+}
+
+function handleIncrementViews(propertyId) {
+    const properties = getStorageData(STORAGE_KEYS.PROPERTIES);
+    const propertyIndex = properties.findIndex(p => p.id === propertyId);
+    
+    if (propertyIndex !== -1) {
+        properties[propertyIndex].views = (properties[propertyIndex].views || 0) + 1;
+        setStorageData(STORAGE_KEYS.PROPERTIES, properties);
+    }
+    
+    return { success: true };
+}
+
+function handleCreateProperty(propertyData) {
+    const properties = getStorageData(STORAGE_KEYS.PROPERTIES);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    
+    const newProperty = {
+        id: Date.now().toString(),
+        ...propertyData,
+        ownerId: currentUser.id,
+        ownerName: currentUser.name,
+        views: 0,
+        createdAt: new Date().toISOString()
+    };
+
+    properties.push(newProperty);
+    setStorageData(STORAGE_KEYS.PROPERTIES, properties);
+    return newProperty;
+}
+
+function handleUpdateProperty(propertyId, propertyData) {
+    const properties = getStorageData(STORAGE_KEYS.PROPERTIES);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    
+    const propertyIndex = properties.findIndex(p => p.id === propertyId && p.ownerId === currentUser.id);
+    if (propertyIndex === -1) {
+        throw new Error('Propriété non trouvée');
+    }
+
+    properties[propertyIndex] = { ...properties[propertyIndex], ...propertyData };
+    setStorageData(STORAGE_KEYS.PROPERTIES, properties);
+    return properties[propertyIndex];
+}
+
+function handleDeleteProperty(propertyId) {
+    const properties = getStorageData(STORAGE_KEYS.PROPERTIES);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    
+    const propertyIndex = properties.findIndex(p => p.id === propertyId && p.ownerId === currentUser.id);
+    if (propertyIndex === -1) {
+        throw new Error('Propriété non trouvée');
+    }
+
+    properties.splice(propertyIndex, 1);
+    setStorageData(STORAGE_KEYS.PROPERTIES, properties);
+    
+    // Supprimer aussi les favoris associés
+    const favorites = getStorageData(STORAGE_KEYS.FAVORITES);
+    const updatedFavorites = favorites.filter(f => f.propertyId !== propertyId);
+    setStorageData(STORAGE_KEYS.FAVORITES, updatedFavorites);
+    
+    return { success: true };
+}
+
+// Gestionnaires d'avis
+function handleCreateReview(propertyId, reviewData) {
+    const reviews = getStorageData(STORAGE_KEYS.REVIEWS);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    
+    const newReview = {
+        id: Date.now().toString(),
+        propertyId: propertyId,
+        userId: currentUser.id,
+        userName: currentUser.name,
+        stars: reviewData.stars,
+        comment: reviewData.comment,
+        date: new Date().toISOString()
+    };
+
+    reviews.push(newReview);
+    setStorageData(STORAGE_KEYS.REVIEWS, reviews);
+    return newReview;
+}
+
+// Gestionnaires de conversations
+function handleGetConversations() {
+    return getStorageData(STORAGE_KEYS.CONVERSATIONS);
+}
+
+function handleGetMyConversations() {
+    const conversations = getStorageData(STORAGE_KEYS.CONVERSATIONS);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    
+    return conversations.filter(c => 
+        c.user1Id === currentUser.id || c.user2Id === currentUser.id
+    );
+}
+
+function handleGetConversation(propertyId, otherUserId) {
+    const conversations = getStorageData(STORAGE_KEYS.CONVERSATIONS);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    
+    let conversation = conversations.find(c => 
+        c.propertyId === propertyId && 
+        ((c.user1Id === currentUser.id && c.user2Id === otherUserId) ||
+         (c.user2Id === currentUser.id && c.user1Id === otherUserId))
+    );
+
+    if (!conversation) {
+        // Créer une nouvelle conversation
+        conversation = {
+            id: Date.now().toString(),
+            propertyId: propertyId,
+            user1Id: currentUser.id,
+            user2Id: otherUserId,
+            messages: [],
+            createdAt: new Date().toISOString()
+        };
+        conversations.push(conversation);
+        setStorageData(STORAGE_KEYS.CONVERSATIONS, conversations);
+    }
+
+    return conversation;
+}
+
+function handleCreateConversation(conversationData) {
+    const conversations = getStorageData(STORAGE_KEYS.CONVERSATIONS);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    
+    const newConversation = {
+        id: Date.now().toString(),
+        ...conversationData,
+        user1Id: currentUser.id,
+        messages: [],
+        createdAt: new Date().toISOString()
+    };
+
+    conversations.push(newConversation);
+    setStorageData(STORAGE_KEYS.CONVERSATIONS, conversations);
+    return newConversation;
+}
+
+function handleSendMessage(messageData) {
+    const conversations = getStorageData(STORAGE_KEYS.CONVERSATIONS);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    
+    const conversation = conversations.find(c => 
+        c.propertyId === messageData.propertyId && 
+        ((c.user1Id === currentUser.id && c.user2Id === messageData.otherUserId) ||
+         (c.user2Id === currentUser.id && c.user1Id === messageData.otherUserId))
+    );
+
+    if (!conversation) {
+        throw new Error('Conversation non trouvée');
+    }
+
+    const newMessage = {
+        id: Date.now().toString(),
+        senderId: currentUser.id,
+        content: messageData.content,
+        timestamp: new Date().toISOString()
+    };
+
+    conversation.messages.push(newMessage);
+    setStorageData(STORAGE_KEYS.CONVERSATIONS, conversations);
+    return newMessage;
+}
+
+// Gestionnaires de visites
+function handleGetVisits() {
+    return getStorageData(STORAGE_KEYS.VISITS);
+}
+
+function handleGetMyVisits() {
+    const visits = getStorageData(STORAGE_KEYS.VISITS);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    return visits.filter(v => v.userId === currentUser.id);
+}
+
+function handleGetMyPropertyVisits() {
+    const visits = getStorageData(STORAGE_KEYS.VISITS);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    const properties = getStorageData(STORAGE_KEYS.PROPERTIES);
+    
+    const myPropertyIds = properties
+        .filter(p => p.ownerId === currentUser.id)
+        .map(p => p.id);
+    
+    return visits.filter(v => myPropertyIds.includes(v.propertyId));
+}
+
+function handleCreateVisit(visitData) {
+    const visits = getStorageData(STORAGE_KEYS.VISITS);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    
+    const newVisit = {
+        id: Date.now().toString(),
+        ...visitData,
+        userId: currentUser.id,
+        userName: currentUser.name,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+    };
+
+    visits.push(newVisit);
+    setStorageData(STORAGE_KEYS.VISITS, visits);
+    return newVisit;
+}
+
+function handleRespondToVisit(visitId, responseData) {
+    const visits = getStorageData(STORAGE_KEYS.VISITS);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    
+    const visitIndex = visits.findIndex(v => v.id === visitId);
+    if (visitIndex === -1) {
+        throw new Error('Visite non trouvée');
+    }
+
+    // Vérifier que l'utilisateur est bien le propriétaire
+    const properties = getStorageData(STORAGE_KEYS.PROPERTIES);
+    const visit = visits[visitIndex];
+    const property = properties.find(p => p.id === visit.propertyId);
+    
+    if (!property || property.ownerId !== currentUser.id) {
+        throw new Error('Non autorisé');
+    }
+
+    visits[visitIndex].status = responseData.status;
+    visits[visitIndex].ownerResponse = responseData.response;
+    setStorageData(STORAGE_KEYS.VISITS, visits);
+    
+    return { success: true };
+}
+
+// Charger les données depuis le localStorage
+function loadInitialData() {
     try {
         showLoading();
         
         // Charger les propriétés
-        const propertiesData = await apiCall('/api/properties');
-        properties = propertiesData;
+        properties = getStorageData(STORAGE_KEYS.PROPERTIES);
+        
+        // Charger les utilisateurs
+        users = getStorageData(STORAGE_KEYS.USERS);
         
         // Charger les conversations si l'utilisateur est connecté
         if (currentUser) {
-            const conversationsData = await apiCall('/api/conversations');
-            conversations = conversationsData;
-            
-            const visitsData = await apiCall('/api/visits');
-            visits = visitsData;
+            conversations = getStorageData(STORAGE_KEYS.CONVERSATIONS);
+            visits = getStorageData(STORAGE_KEYS.VISITS);
         }
         
         hideLoading();
@@ -119,172 +734,6 @@ function showScreen(screenId, params = {}) {
         loadUserProfileData(params.userId);
     }
 }
-
-// Gestion de la sélection du type d'utilisateur
-document.addEventListener('DOMContentLoaded', function() {
-    // Charger le thème sauvegardé
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
-        isDarkMode = true;
-        document.body.setAttribute('data-theme', 'dark');
-        document.getElementById('themeIcon').textContent = '☀️';
-    }
-
-    // Vérifier si l'utilisateur est déjà connecté
-    const token = localStorage.getItem('token');
-    if (token) {
-        // Récupérer les informations de l'utilisateur
-        try {
-            showLoading();
-            apiCall('/api/auth/me')
-                .then(userData => {
-                    currentUser = userData;
-                    updateNavForLoggedUser();
-                    showDashboard();
-                    loadInitialData();
-                    hideLoading();
-                })
-                .catch(error => {
-                    console.error('Erreur de vérification de connexion:', error);
-                    localStorage.removeItem('token');
-                    hideLoading();
-                });
-        } catch (error) {
-            console.error('Erreur:', error);
-            hideLoading();
-        }
-    } else {
-        showScreen('welcome');
-    }
-
-    const userTypeOptions = document.querySelectorAll('.user-type-option');
-    userTypeOptions.forEach(option => {
-        option.addEventListener('click', function() {
-            userTypeOptions.forEach(opt => opt.classList.remove('active'));
-            this.classList.add('active');
-            userType = this.getAttribute('data-type');
-        });
-    });
-
-    // Onglets du profil
-    const profileTabs = document.querySelectorAll('.profile-tab');
-    profileTabs.forEach(tab => {
-        tab.addEventListener('click', function() {
-            const tabId = this.getAttribute('data-tab');
-            profileTabs.forEach(t => t.classList.remove('active'));
-            this.classList.add('active');
-            document.querySelectorAll('.profile-content').forEach(content => {
-                content.classList.remove('active');
-            });
-            document.getElementById(tabId + 'Tab').classList.add('active');
-            if (tabId === 'publications') {
-                loadProfilePublications();
-            } else if (tabId === 'favorites') {
-                loadProfileFavorites();
-            } else if (tabId === 'visits') {
-                loadProfileVisits();
-            }
-        });
-    });
-
-    // Onglets des messages
-    const messagesTabs = document.querySelectorAll('#messagesTabs .profile-tab');
-    messagesTabs.forEach(tab => {
-        tab.addEventListener('click', function() {
-            const tabId = this.getAttribute('data-tab');
-            messagesTabs.forEach(t => t.classList.remove('active'));
-            this.classList.add('active');
-            document.querySelectorAll('#messages .profile-content').forEach(content => {
-                content.classList.remove('active');
-            });
-            document.getElementById(tabId + 'Tab').classList.add('active');
-        });
-    });
-
-    // Configuration de la soumission du formulaire de contact
-    document.getElementById('contactForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        if (validateForm(this)) {
-            showLoading();
-            // Envoyer les données au backend
-            const formData = {
-                name: document.getElementById('contactName').value,
-                email: document.getElementById('contactEmail').value,
-                subject: document.getElementById('contactSubject').value,
-                message: document.getElementById('contactMessage').value
-            };
-            
-            apiCall('/api/contact', {
-                method: 'POST',
-                body: JSON.stringify(formData)
-            })
-            .then(() => {
-                alert('Votre message a été envoyé! Nous vous répondrons dans les plus brefs délais.');
-                this.reset();
-                hideLoading();
-            })
-            .catch(error => {
-                console.error('Erreur:', error);
-                alert('Une erreur s\'est produite lors de l\'envoi du message.');
-                hideLoading();
-            });
-        }
-    });
-
-    // Configuration de la soumission du formulaire de profil
-    document.getElementById('profileForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        if (validateForm(this)) {
-            showLoading();
-            updateProfile();
-        }
-    });
-
-    // Configuration de la soumission du formulaire de sécurité
-    document.getElementById('securityForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        if (validateForm(this)) {
-            showLoading();
-            updatePassword();
-        }
-    });
-
-    // Configuration de la soumission du formulaire de préférences
-    document.getElementById('preferencesForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        showLoading();
-        updatePreferences();
-    });
-
-    // Configuration du formulaire de visite
-    document.getElementById('visitForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        submitVisit();
-    });
-
-    // Écouteur d'événement pour la saisie du chat
-    document.getElementById('chatInput').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            sendChatMessage();
-        }
-    });
-
-    // Sélection des étoiles pour l'avis
-    document.querySelectorAll('#reviewStars i').forEach(star => {
-        star.addEventListener('click', function() {
-            currentReviewStars = parseInt(this.dataset.value);
-            document.querySelectorAll('#reviewStars i').forEach(s => {
-                s.classList.toggle('active', parseInt(s.dataset.value) <= currentReviewStars);
-            });
-        });
-    });
-
-    // Soumission du formulaire d'avis
-    document.getElementById('reviewForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        submitReview();
-    });
-});
 
 // Validation du formulaire
 function validateForm(form) {
@@ -345,7 +794,7 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
         return;
     }
 
-    // Créer l'utilisateur via l'API
+    // Créer l'utilisateur
     const userData = {
         name: fullName,
         email: email,
@@ -360,8 +809,6 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
     })
     .then(data => {
         if (data.token) {
-            // Stocker le token JWT pour les futures requêtes
-            localStorage.setItem('token', data.token);
             currentUser = data.user;
 
             const successDiv = document.createElement('div');
@@ -380,15 +827,12 @@ document.getElementById('registerForm').addEventListener('submit', function(e) {
             
             // Charger les données initiales
             loadInitialData();
-        } else {
-            document.getElementById('emailError').textContent = data.msg || 'Erreur lors de l\'inscription';
-            document.getElementById('emailError').classList.add('active');
         }
         hideLoading();
     })
     .catch(error => {
         console.error('Erreur:', error);
-        document.getElementById('emailError').textContent = 'Erreur lors de l\'inscription';
+        document.getElementById('emailError').textContent = error.message || 'Erreur lors de l\'inscription';
         document.getElementById('emailError').classList.add('active');
         hideLoading();
     });
@@ -403,15 +847,13 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
 
-    // Appel API vers le backend
+    // Appel API simulé
     apiCall('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password })
     })
     .then(data => {
         if (data.token) {
-            // Stocker le token JWT pour les futures requêtes
-            localStorage.setItem('token', data.token);
             currentUser = data.user;
 
             const successDiv = document.createElement('div');
@@ -430,15 +872,12 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
             
             // Charger les données initiales
             loadInitialData();
-        } else {
-            document.getElementById('loginPasswordError').textContent = data.msg || 'Email ou mot de passe incorrect';
-            document.getElementById('loginPasswordError').classList.add('active');
         }
         hideLoading();
     })
     .catch(error => {
         console.error('Erreur:', error);
-        document.getElementById('loginPasswordError').textContent = 'Erreur serveur';
+        document.getElementById('loginPasswordError').textContent = error.message || 'Email ou mot de passe incorrect';
         document.getElementById('loginPasswordError').classList.add('active');
         hideLoading();
     });
@@ -474,12 +913,10 @@ function logout() {
     showLoading();
     
     // Appel API pour déconnexion
-    apiCall('/api/auth/logout', {
-        method: 'POST'
-    })
+    apiCall('/api/auth/logout')
     .finally(() => {
         currentUser = null;
-        localStorage.removeItem('token');
+        localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
         updateNavForLoggedUser();
         showScreen('welcome');
         // Réinitialiser les formulaires
@@ -495,7 +932,7 @@ function logout() {
     });
 }
 
-// Charger les données du profil (propre profil)
+// Charger les données du profil
 async function loadProfileData() {
     if (!currentUser) return;
 
@@ -609,7 +1046,7 @@ async function loadUserProfileData(userId) {
     }
 }
 
-// Charger les publications du profil (propre)
+// Charger les publications du profil
 async function loadProfilePublications() {
     if (!currentUser || currentUser.type !== 'owner') return;
 
@@ -632,7 +1069,7 @@ async function loadProfilePublications() {
     }
 }
 
-// Charger les favoris du profil (locataire)
+// Charger les favoris du profil
 async function loadProfileFavorites() {
     if (!currentUser || currentUser.type !== 'tenant') return;
 
@@ -660,7 +1097,7 @@ async function loadProfileFavorites() {
     }
 }
 
-// Charger les visites du profil (locataire)
+// Charger les visites du profil
 async function loadProfileVisits() {
     if (!currentUser || currentUser.type !== 'tenant') return;
 
@@ -690,7 +1127,7 @@ async function loadProfileVisits() {
                 <p><strong>Adresse:</strong> ${property.address}, ${property.city}</p>
                 ${visit.message ? `<p><strong>Message:</strong> ${visit.message}</p>` : ''}
                 ${visit.ownerResponse ? `<p><strong>Réponse du propriétaire:</strong> ${visit.ownerResponse}</p>` : ''}
-        `;
+            `;
             visitsContainer.appendChild(visitCard);
         }
         
@@ -798,7 +1235,7 @@ async function updatePassword() {
         hideLoading();
     } catch (error) {
         console.error('Erreur lors de la mise à jour du mot de passe:', error);
-        document.getElementById('currentPasswordError').textContent = 'Erreur lors de la mise à jour du mot de passe';
+        document.getElementById('currentPasswordError').textContent = error.message || 'Erreur lors de la mise à jour du mot de passe';
         document.getElementById('currentPasswordError').classList.add('active');
         hideLoading();
     }
@@ -974,7 +1411,7 @@ async function performSearch() {
         const amenities = Array.from(document.querySelectorAll('input[name="searchAmenity"]:checked')).map(cb => cb.value);
         const sortBy = document.getElementById('sortBy').value;
 
-        // Construire les paramètres de requête
+        // Construire l'URL avec les paramètres
         const params = new URLSearchParams();
         if (city) params.append('city', city);
         if (type) params.append('type', type);
@@ -1060,7 +1497,11 @@ function createPropertyCard(property, isOwner = false) {
     const avgRating = reviews.length > 0 ? (reviews.reduce((sum, r) => sum + r.stars, 0) / reviews.length).toFixed(1) : 0;
     const starsHtml = '<i class="fas fa-star"></i>'.repeat(Math.floor(avgRating)) + (avgRating % 1 > 0 ? '<i class="fas fa-star-half-alt"></i>' : '') + '<i class="far fa-star"></i>'.repeat(5 - Math.ceil(avgRating));
 
-    const isFavorited = currentUser && currentUser.type === 'tenant' && currentUser.favorites && currentUser.favorites.includes(property.id);
+    // Vérifier si la propriété est dans les favoris
+    const favorites = getStorageData(STORAGE_KEYS.FAVORITES);
+    const currentUser = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    const isFavorited = currentUser && currentUser.type === 'tenant' && 
+                       favorites.some(f => f.userId === currentUser.id && f.propertyId === property.id);
 
     // Créer le HTML des équipements
     let amenitiesHtml = '';
@@ -1085,7 +1526,7 @@ function createPropertyCard(property, isOwner = false) {
         <div class="property-image">
             ${property.images && property.images.length > 0 ?
                 `<img src="${property.images[0]}" alt="${property.title}">` :
-                imagePlaceholder}
+                `<div class="property-image-placeholder">${imagePlaceholder}</div>`}
             <span class="property-status ${statusClass}">${statusText}</span>
         </div>
         <div class="property-content">
@@ -1105,16 +1546,20 @@ function createPropertyCard(property, isOwner = false) {
             ${!isOwner ? `<p class="property-whatsapp"><i class="fab fa-whatsapp"></i> ${property.whatsapp}</p>` : ''}
             <div class="form-actions" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 ${isOwner ? `
-                    <button class="btn btn-primary" onclick="viewProperty(${property.id})">Voir</button>
-                    <button class="btn btn-secondary" onclick="editProperty(${property.id})">Modifier</button>
-                    <button class="btn" onclick="deleteProperty(${property.id})" style="background: var(--error-color); color: white;">Supprimer</button>
+                    <button class="btn btn-primary" onclick="viewProperty('${property.id}')">Voir</button>
+                    <button class="btn btn-secondary" onclick="editProperty('${property.id}')">Modifier</button>
+                    <button class="btn" onclick="deleteProperty('${property.id}')" style="background: var(--error-color); color: white;">Supprimer</button>
                 ` : `
-                    <button class="btn btn-primary" onclick="viewProperty(${property.id})">Voir détails</button>
-                    <button class="btn btn-whatsapp" onclick="contactOwner(${property.id})">
+                    <button class="btn btn-primary" onclick="viewProperty('${property.id}')">Voir détails</button>
+                    <button class="btn btn-whatsapp" onclick="contactOwner('${property.id}')">
                         <i class="fab fa-whatsapp"></i> Contacter
                     </button>
-                    <button class="btn btn-secondary" onclick="startConversation(${property.id})">Message</button>
-                    ${currentUser && currentUser.type === 'tenant' ? `<button class="btn btn-favorite ${isFavorited ? 'active' : ''}" onclick="toggleFavorite(${property.id})">${isFavorited ? 'Retirer des favoris' : 'Ajouter aux favoris'}</button>` : ''}
+                    <button class="btn btn-secondary" onclick="startConversation('${property.id}')">Message</button>
+                    ${currentUser && currentUser.type === 'tenant' ? `
+                        <button class="btn btn-favorite ${isFavorited ? 'active' : ''}" onclick="toggleFavorite('${property.id}')">
+                            ${isFavorited ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                        </button>
+                    ` : ''}
                 `}
             </div>
         </div>
@@ -1165,7 +1610,7 @@ function showAddPropertyForm() {
 
 // Modifier la propriété
 function editProperty(propertyId) {
-    const property = properties.find(p => p.id === propertyId);
+    const property = getStorageData(STORAGE_KEYS.PROPERTIES).find(p => p.id === propertyId);
     if (!property) return;
 
     document.getElementById('propertyFormTitle').textContent = 'Modifier la propriété';
@@ -1400,15 +1845,12 @@ async function loadModalReviews(propertyId) {
         }
 
         for (const review of property.reviews) {
-            const reviewer = await apiCall(`/api/users/${review.userId}`);
-            const reviewerName = reviewer ? reviewer.name : 'Anonyme';
-
             const reviewCard = document.createElement('div');
             reviewCard.className = 'review-card';
             reviewCard.innerHTML = `
                 <div class="review-stars">${'<i class="fas fa-star"></i>'.repeat(review.stars)}</div>
                 <div class="review-comment">${review.comment}</div>
-                <p class="text-right" style="font-size: 0.8rem; color: var(--text-secondary);">${reviewerName} - ${new Date(review.date).toLocaleDateString('fr-FR')}</p>
+                <p class="text-right" style="font-size: 0.8rem; color: var(--text-secondary);">${review.userName} - ${new Date(review.date).toLocaleDateString('fr-FR')}</p>
             `;
             reviewsList.appendChild(reviewCard);
         }
@@ -1863,27 +2305,121 @@ function getStatusText(status) {
     }
 }
 
+// Initialiser les données d'exemple
+function initializeSampleData() {
+    const users = getStorageData(STORAGE_KEYS.USERS);
+    const properties = getStorageData(STORAGE_KEYS.PROPERTIES);
+    
+    // Si pas encore de données, créer des exemples
+    if (users.length === 0) {
+        const sampleUsers = [
+            {
+                id: '1',
+                name: 'Jean Dupont',
+                email: 'jean@example.com',
+                phone: '0555123456',
+                password: 'password123',
+                type: 'owner',
+                bio: 'Propriétaire sérieux avec plusieurs biens à Alger',
+                avatar: null,
+                preferences: {
+                    emailNotifications: true,
+                    smsNotifications: false,
+                    whatsappNotifications: true,
+                    language: 'fr'
+                },
+                createdAt: new Date().toISOString()
+            },
+            {
+                id: '2',
+                name: 'Marie Martin',
+                email: 'marie@example.com',
+                phone: '0555654321',
+                password: 'password123',
+                type: 'tenant',
+                bio: 'À la recherche d\'un logement spacieux dans Alger centre',
+                avatar: null,
+                preferences: {
+                    emailNotifications: true,
+                    smsNotifications: true,
+                    whatsappNotifications: true,
+                    language: 'fr'
+                },
+                createdAt: new Date().toISOString()
+            }
+        ];
+        setStorageData(STORAGE_KEYS.USERS, sampleUsers);
+    }
+
+    if (properties.length === 0) {
+        const sampleProperties = [
+            {
+                id: '1',
+                title: 'Bel appartement centre ville Alger',
+                price: 45000,
+                type: 'appartement',
+                status: 'available',
+                surface: 75,
+                rooms: 3,
+                bedrooms: 2,
+                bathrooms: 1,
+                address: '123 Rue Didouche Mourad',
+                city: 'Alger',
+                whatsapp: '0555123456',
+                description: 'Superbe appartement rénové au cœur d\'Alger, proche de tous les commerces et transports. Appartement lumineux avec vue sur la mer.',
+                images: [],
+                amenities: ['wifi', 'climatisation', 'parking'],
+                ownerId: '1',
+                ownerName: 'Jean Dupont',
+                views: 12,
+                createdAt: new Date().toISOString()
+            },
+            {
+                id: '2',
+                title: 'Villa moderne avec jardin',
+                price: 120000,
+                type: 'maison',
+                status: 'available',
+                surface: 180,
+                rooms: 5,
+                bedrooms: 3,
+                bathrooms: 2,
+                address: '45 Avenue des Frères Bouchama',
+                city: 'Alger',
+                whatsapp: '0555123456',
+                description: 'Magnifique villa moderne avec grand jardin, piscine et garage. Idéale pour famille.',
+                images: [],
+                amenities: ['wifi', 'climatisation', 'parking', 'piscine'],
+                ownerId: '1',
+                ownerName: 'Jean Dupont',
+                views: 8,
+                createdAt: new Date().toISOString()
+            }
+        ];
+        setStorageData(STORAGE_KEYS.PROPERTIES, sampleProperties);
+    }
+}
+
 // Initialiser l'application
 function initApp() {
+    // Initialiser les données d'exemple
+    initializeSampleData();
+    
+    // Charger le thème sauvegardé
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+        isDarkMode = true;
+        document.body.setAttribute('data-theme', 'dark');
+        document.getElementById('themeIcon').textContent = '☀️';
+    }
+
     // Vérifier si l'utilisateur est déjà connecté
-    const token = localStorage.getItem('token');
-    if (token) {
-        // Récupérer les informations de l'utilisateur
-        showLoading();
-        apiCall('/api/auth/me')
-            .then(userData => {
-                currentUser = userData;
-                updateNavForLoggedUser();
-                showDashboard();
-                loadInitialData();
-                hideLoading();
-            })
-            .catch(error => {
-                console.error('Erreur de vérification de connexion:', error);
-                localStorage.removeItem('token');
-                showScreen('welcome');
-                hideLoading();
-            });
+    const currentUserData = getStorageData(STORAGE_KEYS.CURRENT_USER);
+    if (currentUserData && currentUserData.id) {
+        currentUser = currentUserData;
+        updateNavForLoggedUser();
+        showDashboard();
+        loadInitialData();
     } else {
         showScreen('welcome');
     }
